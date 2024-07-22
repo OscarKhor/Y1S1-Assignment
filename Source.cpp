@@ -287,19 +287,48 @@ public:
         }
     }
 
-    void generateSalesReport() {
-        double totalSales = 0.0;
-        for (auto& customer : customers) {
-            for (auto& service : customer.bookedServices) {
-                for (auto& s : services) {
-                    if (s.name == service) {
-                        totalSales += s.price;
-                    }
-                }
-            }
-        }
-        cout << "Total Sales: $" << totalSales << endl;
-    }
+     void generateSalesReport() {
+     double totalSales = 0.0;
+     map<string, double> serviceSales; // Stores the total revenue for each service
+     map<string, double> customerSales; // Stores the total revenue from each customer
+
+     // Iterate through all customers
+     for (auto& customer : customers) {
+         double customerTotal = 0.0; // The total revenue for the current customer
+         // Iterate through all services booked by the customer
+         for (auto& service : customer.bookedServices) {
+             // Iterate through all services to match the service name
+             for (auto& s : services) {
+                 if (s.name == service) {
+                     totalSales += s.price; // Accumulate the total sales
+                     customerTotal += s.price; // Accumulate the total revenue for the current customer
+                     serviceSales[s.name] += s.price; // Accumulate the total revenue for the current service
+                 }
+             }
+         }
+         customerSales[customer.name] = customerTotal; // Record the total revenue for the current customer
+     }
+
+     // Output the revenue for each service
+     cout << "Service Sales Breakdown:" << endl;
+     for (auto& entry : serviceSales) {
+         cout << "- " << setw(10) << left << entry.first << ": $" << fixed << setprecision(2) << entry.second << endl;
+     }
+
+     // Output the total sales
+     cout << "Total Sales : $" << fixed << setprecision(2) << totalSales << endl;
+     cout << "=====================" << endl;
+
+     // Output the revenue from each customer
+     cout << "Customer Sales Breakdown:" << endl;
+     for (auto& entry : customerSales) {
+         cout << "- " << setw(10) << left << entry.first << ": $" << fixed << setprecision(2) << entry.second << endl;
+     }
+
+     // Output the total sales again
+     cout << "Total Sales : $" << fixed << setprecision(2) << totalSales << endl;
+     cout << endl;
+ }
 };
 
 int main() {
