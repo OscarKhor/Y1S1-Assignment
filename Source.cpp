@@ -229,7 +229,7 @@ public:
                 customers.back().bookedServices.push_back(serviceName);
                 cout << "Booking successful." << endl;
                 std::cout << std::endl;
-                cout << "Thank you for choosing Fairy Beauty, where beauty meets confidence!" << endl;
+                cout << "Thank you for choosing Beauty Service, where beauty meets confidence!" << endl;
                 return;
             }
         }
