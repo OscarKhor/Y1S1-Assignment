@@ -1,0 +1,340 @@
+#include <iostream>
+#include <vector>
+#include <string>
+#include <map>
+#include <iomanip>
+#include <ctime>
+
+using namespace std;
+
+class Service {
+public:
+    string name;
+    double price;
+    Service(string n, double p) : name(n), price(p) {}
+};
+
+class Expert {
+public:
+    string name;
+    int maxHoursPerWeek;
+    int hoursWorked;
+    map<int, vector<int>> schedule; // <month, days booked>
+    Expert(string n) : name(n), maxHoursPerWeek(30), hoursWorked(0) {}
+};
+
+class Customer {
+public:
+    string name;
+    vector<string> bookedServices;
+    Customer(string n) : name(n) {}
+};
+
+class BeautyServiceApp {
+private:
+    vector<Service> services;
+    vector<Expert> experts;
+    vector<Customer> customers;
+
+public:
+    BeautyServiceApp() {
+        // Initialize services and experts
+        services.push_back(Service("Facial", 50.0));
+        services.push_back(Service("Makeup Application", 70.0));
+        services.push_back(Service("Manicure", 30.0));
+        experts.push_back(Expert("Alice"));
+        experts.push_back(Expert("Bob"));
+        experts.push_back(Expert("Cathy"));
+    }
+
+    void showLogo() {
+        cout << "\033[1;36m";
+        cout << "*****   *****     ****      **  **  ******  **  **\n";
+        cout << "**  **  **       **  **     **  **    **     **** \n";
+        cout << "*****   ****    ********    **  **    **      **  \n";
+        cout << "**  **  **     **      **   **  **    **      **  \n";
+        cout << "*****   ***** **        **   ****     **      **  \n";
+        cout << "\033[0m";
+
+        cout << endl;
+
+        cout << "\033[1;35m";
+        cout << "*****  *****  ****    **   **  ******  ******  *****   *****\n";
+        cout << "**     **     **  **   ** **     **    **      **      **   \n";
+        cout << "*****  ****   ******    ***      **    **      ****    *****\n";
+        cout << "   **  **     ** **     ***      **    **      **         **\n";
+        cout << "*****  *****  **  **     *     ******  ******  *****   *****\n";
+        cout << "\033[0m";
+        cout << "\n";
+    }
+
+    void showMainMenu() {
+        int choice;
+        do {
+            cout << "1. Customer Menu" << endl;
+            cout << "2. Admin/Expert Menu" << endl;
+            cout << "3. Exit" << endl;
+            cout << "Enter your choice: ";
+            cin >> choice;
+
+            switch (choice) {
+            case 1: customerMenu(); break;
+            case 2: adminExpertMenu(); break;
+            case 3: cout << "Exiting..." << endl; break;
+            default: cout << "Invalid choice. Please try again." << endl;
+            }
+        } while (choice != 3);
+    }
+
+    void customerMenu() {
+        int choice;
+        do {
+            cout << "1. View Organization Details" << endl;
+            cout << "2. View Services and Experts" << endl;
+            cout << "3. Check Schedule" << endl;
+            cout << "4. Book Service" << endl;
+            cout << "5. View Booked Schedule" << endl;
+            cout << "6. Back to Main Menu" << endl;
+            cout << "Enter your choice: ";
+            cin >> choice;
+
+            switch (choice) {
+            case 1: viewOrganizationDetails(); break;
+            case 2: viewServicesAndExperts(); break;
+            case 3: checkSchedule(); break;
+            case 4: bookService(); break;
+            case 5: viewBookedSchedule(); break;
+            case 6: break;
+            default: cout << "Invalid choice. Please try again." << endl;
+            }
+        } while (choice != 6);
+    }
+
+    void adminExpertMenu() {
+        int choice;
+        do {
+            cout << "1. View Individual Schedule" << endl;
+            cout << "2. View Overall Schedule" << endl;
+            cout << "3. View Customers" << endl;
+            cout << "4. Generate Sales Report" << endl;
+            cout << "5. Back to Main Menu" << endl;
+            cout << "Enter your choice: ";
+            cin >> choice;
+
+            switch (choice) {
+            case 1: viewIndividualSchedule(); break;
+            case 2: viewOverallSchedule(); break;
+            case 3: viewCustomers(); break;
+            case 4: generateSalesReport(); break;
+            case 5: break;
+            default: cout << "Invalid choice. Try again." << endl;
+            }
+        } while (choice != 5);
+    }
+
+    void viewOrganizationDetails() {
+        cout << endl;
+        cout << "Welcome to Beauty Services!" << endl;
+        cout << endl;
+        cout << "About Us:" << endl;
+        cout << "Beauty Services, founded in 2010, focuses on delivering cutting-edge skincare and beauty solutions." << endl;
+        cout << "Our mission is to prioritize quality, safety, and efficacy in all our services." << endl;
+        cout << endl;
+        cout << "Our services:" << endl;
+        cout << "Facials           : Rejuvenate your skin with our custom facials." << endl;
+        cout << "Makeup Application: Perfect your look for any occasion with our expert makeup artists." << endl;
+        cout << "Manicure          : Improves the overall look of your nails and hands." << endl;
+        cout << endl;
+        cout << "Location          : 123 Beauty St." << endl;
+        cout << endl;
+        cout << "Online Presence:" << endl;
+        cout << "Google            : www.Beautyservices.com" << endl;
+        cout << "Instagram         : @Beautyservices" << endl;
+        cout << "Facebook          : /Beautyservices" << endl;
+        cout << endl;
+        cout << "Customer Support:" << endl;
+        cout << "Contact           : 555-1234" << endl;
+        cout << "Email             : BeautyServices@gmail.com" << endl;
+        cout << endl;
+        cout << endl;
+    }
+
+    void viewServicesAndExperts() {
+        cout << endl;
+        cout << setfill('-') << setw(45) << "" << setfill(' ') << endl;
+        cout << left << setw(20) << "Service Name"
+            << setw(20) << "Expert Name"
+            << setw(10) << "Price" << endl;
+        cout << setfill('-') << setw(45) << "" << setfill(' ') << endl;
+
+        // Display services, experts, and prices
+        for (size_t i = 0; i < services.size(); ++i) {
+            cout << left << setw(20) << services[i].name;
+            if (i < experts.size()) {
+                cout << setw(20) << experts[i].name;
+            }
+            else {
+                cout << setw(20) << "N/A";
+            }
+            if (i < services.size()) {
+                cout << fixed << setprecision(2) << setw(10) << services[i].price << endl;
+            }
+            else {
+                cout << setw(10) << "N/A" << endl;
+            }
+        }
+
+        cout << endl;
+    }
+
+    void showCalendar(int month) {
+        const int daysInMonth = 30; // Simplified month length
+        cout << "Sun Mon Tue Wed Thu Fri Sat\n";
+        for (int i = 1; i <= daysInMonth; ++i) {
+            bool booked = false;
+            for (const auto& expert : experts) {
+                if (expert.schedule.find(month) != expert.schedule.end()) {
+                    for (const auto& day : expert.schedule.at(month)) {
+                        if (day == i) {
+                            booked = true;
+                            break;
+                        }
+                    }
+                }
+                if (booked) break;
+            }
+            cout << setw(3) << i << (booked ? "*" : " ") << " ";
+            if (i % 7 == 0) cout << "\n";
+        }
+        cout << "\n";
+    }
+
+    void checkSchedule() {
+        int month;
+        cout << "Enter month (1-12) to view schedule: ";
+        cin >> month;
+        showCalendar(month);
+    }
+
+    void bookService() {
+        string customerName, serviceName, expertName;
+        int month, day;
+        cout << "Enter your name: ";
+        cin >> customerName;
+        cout << "Enter service name: ";
+        cin >> serviceName;
+        cout << "Enter expert name: ";
+        cin >> expertName;
+        cout << "Enter month: ";
+        cin >> month;
+        cout << "Enter day: ";
+        cin >> day;
+
+        // Check if slot is available and book it
+        for (auto& expert : experts) {
+            if (expert.name == expertName) {
+                if (expert.schedule[month].size() < 30) { // Assuming each expert can handle a maximum of 30 bookings per month
+                    expert.schedule[month].push_back(day);
+                    cout << "Service booked successfully for " << customerName << " with " << expertName << " on " << month << "/" << day << endl;
+                    return;
+                }
+                else {
+                    cout << "Sorry, no available slots for the chosen expert and month." << endl;
+                    return;
+                }
+            }
+        }
+        cout << "Expert not found." << endl;
+    }
+
+    void viewBookedSchedule() {
+        cout << "Enter your name to view your booked schedule: ";
+        string customerName;
+        cin >> customerName;
+
+        // Display the booked schedule for the customer
+        cout << "Booked schedule for " << customerName << ":\n";
+        for (const auto& expert : experts) {
+            cout << "Expert: " << expert.name << "\n";
+            for (const auto& month : expert.schedule) {
+                cout << "Month: " << month.first << "\nDays: ";
+                for (const auto& day : month.second) {
+                    cout << day << " ";
+                }
+                cout << "\n";
+            }
+            cout << "\n";
+        }
+    }
+
+    void viewIndividualSchedule() {
+        cout << "Enter expert name to view their schedule: ";
+        string expertName;
+        cin >> expertName;
+
+        // Display individual schedule for the expert
+        for (const auto& expert : experts) {
+            if (expert.name == expertName) {
+                cout << "Schedule for " << expert.name << ":\n";
+                for (const auto& month : expert.schedule) {
+                    cout << "Month: " << month.first << "\nDays: ";
+                    for (const auto& day : month.second) {
+                        cout << day << " ";
+                    }
+                    cout << "\n";
+                }
+                return;
+            }
+        }
+        cout << "Expert not found." << endl;
+    }
+
+    void viewOverallSchedule() {
+        // Display the overall schedule for all experts
+        cout << "Overall schedule for all experts:\n";
+        for (const auto& expert : experts) {
+            cout << "Expert: " << expert.name << "\n";
+            for (const auto& month : expert.schedule) {
+                cout << "Month: " << month.first << "\nDays: ";
+                for (const auto& day : month.second) {
+                    cout << day << " ";
+                }
+                cout << "\n";
+            }
+            cout << "\n";
+        }
+    }
+
+    void viewCustomers() {
+        cout << "List of customers:\n";
+        for (const auto& customer : customers) {
+            cout << "Customer Name: " << customer.name << "\nBooked Services: ";
+            for (const auto& service : customer.bookedServices) {
+                cout << service << " ";
+            }
+            cout << "\n";
+        }
+    }
+
+    void generateSalesReport() {
+        double totalSales = 0.0;
+        // Calculate total sales
+        for (const auto& expert : experts) {
+            for (const auto& month : expert.schedule) {
+                for (const auto& day : month.second) {
+                    for (const auto& service : services) {
+                        totalSales += service.price;
+                    }
+                }
+            }
+        }
+        cout << "Total Sales: $" << fixed << setprecision(2) << totalSales << endl;
+    }
+};
+
+int main() {
+    BeautyServiceApp app;
+    app.showLogo();
+    app.showMainMenu();
+    return 0;
+}
