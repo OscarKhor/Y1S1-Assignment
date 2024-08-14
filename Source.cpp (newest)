@@ -1,0 +1,396 @@
+#include <iostream>
+#include <vector>
+#include <string>
+#include <map>
+#include <iomanip>
+#include <algorithm> // For transform and equal
+
+using namespace std;
+
+class Service {
+public:
+    string name;
+    double price;
+    int duration; // Duration in hours
+    Service(string n, double p, int d) : name(n), price(p), duration(d) {}
+};
+
+class Expert {
+public:
+    string name;
+    int maxHoursPerWeek;
+    int hoursWorked;
+    map<int, vector<int>> schedule; // <month, days booked>
+
+    Expert(string n) : name(n), maxHoursPerWeek(30), hoursWorked(0) {}
+
+    bool canWork(int additionalHours) const {
+        return (hoursWorked + additionalHours <= maxHoursPerWeek);
+    }
+
+    void addSchedule(int month, int day) {
+        schedule[month].push_back(day);
+    }
+};
+
+class Customer {
+public:
+    string name;
+    vector<tuple<string, int, string>> bookedServices; // Service name, month-day pair, and expert name
+    Customer(string n) : name(n) {}
+};
+
+class BeautyServiceApp {
+private:
+    vector<Service> services;
+    vector<Expert> experts;
+    vector<Customer> customers;
+
+    // Simplified case-insensitive comparison function
+    static bool caseInsensitiveEqual(const string& str1, const string& str2) {
+        if (str1.size() != str2.size()) return false;
+        return equal(str1.begin(), str1.end(), str2.begin(), str2.end(), [](char a, char b) {
+            return tolower(a) == tolower(b);
+            });
+    }
+
+public:
+    BeautyServiceApp() {
+        // Initialize services and experts
+        services.push_back(Service("Facial", 50.0, 2));
+        services.push_back(Service("Makeup", 70.0, 2));
+        services.push_back(Service("Manicure", 30.0, 2));
+        services.push_back(Service("Consultation", 20.0, 1)); 
+        experts.push_back(Expert("Alice"));
+        experts.push_back(Expert("Bob"));
+        experts.push_back(Expert("Cathy"));
+    }
+
+    void showLogo() {
+        cout << "\033[1;36m";
+        cout << "*****   *****     ****      **  **  ******  **  **\n";
+        cout << "**  **  **       **  **     **  **    **     **** \n";
+        cout << "*****   ****    ********    **  **    **      **  \n";
+        cout << "**  **  **     **      **   **  **    **      **  \n";
+        cout << "*****   ***** **        **   ****     **      **  \n";
+        cout << "\033[0m";
+
+        cout << endl;
+
+        cout << "\033[1;35m";
+        cout << "*****  *****  ****    **   **  ******  ******  *****   *****\n";
+        cout << "**     **     **  **   ** **     **    **      **      **   \n";
+        cout << "*****  ****   ******    ***      **    **      ****    *****\n";
+        cout << "   **  **     ** **     ***      **    **      **         **\n";
+        cout << "*****  *****  **  **     *     ******  ******  *****   *****\n";
+        cout << "\033[0m";
+        cout << "\n";
+    }
+
+    void showMainMenu() {
+        int choice;
+        do {
+            cout << "1. Customer Menu" << endl;
+            cout << "2. Admin/Expert Menu" << endl;
+            cout << "3. Exit" << endl;
+            cout << "Enter your choice: ";
+            cin >> choice;
+
+            switch (choice) {
+            case 1: customerMenu(); break;
+            case 2: adminExpertMenu(); break;
+            case 3: cout << "Exiting..." << endl; break;
+            default: cout << "Invalid choice. Please try again." << endl;
+            }
+        } while (choice != 3);
+    }
+
+    void customerMenu() {
+        int choice;
+        do {
+            cout << "1. View Organization Details" << endl;
+            cout << "2. View Services and Experts" << endl;
+            cout << "3. Check Schedule" << endl;
+            cout << "4. Book Service" << endl;
+            cout << "5. View Booked Schedule" << endl;
+            cout << "6. Back to Main Menu" << endl;
+            cout << "Enter your choice: ";
+            cin >> choice;
+
+            switch (choice) {
+            case 1: viewOrganizationDetails(); break;
+            case 2: viewServicesAndExperts(); break;
+            case 3: checkSchedule(); break;
+            case 4: bookService(); break;
+            case 5: viewBookedSchedule(); break;
+            case 6: break;
+            default: cout << "Invalid choice. Please try again." << endl;
+            }
+        } while (choice != 6);
+    }
+
+    void adminExpertMenu() {
+        int choice;
+        do {
+            cout << "1. View Individual Schedule" << endl;
+            cout << "2. View Overall Schedule" << endl;
+            cout << "3. View Customers" << endl;
+            cout << "4. Generate Sales Report" << endl;
+            cout << "5. Back to Main Menu" << endl;
+            cout << "Enter your choice: ";
+            cin >> choice;
+
+            switch (choice) {
+            case 1: {
+                string expertName;
+                cout << "Enter the expert's name: ";
+                cin >> expertName;
+                viewIndividualSchedule(expertName);
+                break;
+            }
+            case 2: viewOverallSchedule(); break;
+            case 3: viewCustomers(); break;
+            case 4: generateSalesReport(); break;
+            case 5: break;
+            default: cout << "Invalid choice. Try again." << endl;
+            }
+        } while (choice != 5);
+    }
+
+    void viewOrganizationDetails() {
+        cout << endl;
+        cout << "Welcome to Beauty Services!" << endl;
+        cout << endl;
+        cout << "About Us:" << endl;
+        cout << "Beauty Services, founded in 2010, focuses on delivering cutting-edge skincare and beauty solutions." << endl;
+        cout << "Our mission is to prioritize quality, safety, and efficacy in all our services." << endl;
+        cout << endl;
+        cout << "Our services:" << endl;
+        cout << "Facials           : Rejuvenate your skin with our custom facials." << endl;
+        cout << "Makeup Application: Perfect your look for any occasion with our expert makeup artists." << endl;
+        cout << "Manicure          : Improves the overall look of your nails and hands." << endl;
+        cout << "Consultation      : Get personalized beauty advice and recommendations." << endl; // New service description
+        cout << endl;
+        cout << "Location          : 123 Beauty St." << endl;
+        cout << endl;
+        cout << "Online Presence:" << endl;
+        cout << "Google            : www.Beautyservices.com" << endl;
+        cout << "Instagram         : @Beautyservices" << endl;
+        cout << "Facebook          : /Beautyservices" << endl;
+        cout << endl;
+        cout << "Customer Support:" << endl;
+        cout << "Contact           : 555-1234" << endl;
+        cout << "Email             : BeautyServices@gmail.com" << endl;
+        cout << endl;
+    }
+
+    void viewServicesAndExperts() {
+        cout << endl;
+        cout << setfill('-') << setw(80) << "" << setfill(' ') << endl;
+        cout << left << setw(25) << "Service Name" << setw(10) << "Price" << setw(15) << "Duration (hrs)" << setw(30) << "Available Experts" << endl;
+        cout << setfill('-') << setw(80) << "" << setfill(' ') << endl;
+
+        // Display services and prices
+        for (const auto& service : services) {
+            cout << left << setw(25) << service.name;
+            cout << setw(10) << fixed << setprecision(2) << service.price;
+            cout << setw(15) << service.duration;
+
+            // Find and display available experts for the service
+            string expertsList;
+            for (const auto& expert : experts) {
+                // Assume all experts can provide all services for simplicity
+                expertsList += expert.name + ", ";
+            }
+
+            // Remove the trailing comma and space
+            if (!expertsList.empty()) {
+                expertsList.pop_back(); // Remove the last space
+                expertsList.pop_back(); // Remove the last comma
+            }
+
+            cout << setw(30) << expertsList << endl;
+        }
+
+        cout << setfill('-') << setw(80) << "" << setfill(' ') << endl;
+        cout << endl;
+    }
+
+
+    void showCalendar(int month) {
+        const int daysInMonth = 30; // Simplified month length
+        cout << "Sun  Mon  Tue  Wed  Thu  Fri  Sat\n";
+        for (int i = 1; i <= daysInMonth; ++i) {
+            bool booked = false;
+            for (const auto& expert : experts) {
+                if (expert.schedule.find(month) != expert.schedule.end()) {
+                    if (find(expert.schedule.at(month).begin(), expert.schedule.at(month).end(), i) != expert.schedule.at(month).end()) {
+                        booked = true;
+                        break;
+                    }
+                }
+            }
+            cout << setw(3) << i << (booked ? "*" : " ") << " ";
+            if (i % 7 == 0) cout << "\n";
+        }
+        cout << "\n";
+    }
+
+    void checkSchedule() {
+        int month;
+        cout << "Enter the month (1-12): ";
+        cin >> month;
+        cout << "Schedule for month " << month << ":\n";
+        showCalendar(month);
+    }
+
+    void bookService() {
+        string customerName;
+        string serviceName;
+        int month;
+        int day;
+        string expertName;
+
+        cout << "Enter your name: ";
+        cin >> customerName;
+        cout << "Enter service name: ";
+        cin >> serviceName;
+        cout << "Enter month (1-12): ";
+        cin >> month;
+        cout << "Enter day (1-30): ";
+        cin >> day;
+        cout << "Enter expert's name: ";
+        cin >> expertName;
+
+        auto serviceIt = find_if(services.begin(), services.end(), [&](const Service& s) { return caseInsensitiveEqual(s.name, serviceName); });
+        if (serviceIt == services.end()) {
+            cout << "Service not found." << endl;
+            return;
+        }
+
+        auto expertIt = find_if(experts.begin(), experts.end(), [&](const Expert& e) { return caseInsensitiveEqual(e.name, expertName); });
+        if (expertIt == experts.end()) {
+            cout << "Expert not found." << endl;
+            return;
+        }
+
+        // Check if the expert can accommodate this booking
+        int hoursRequired = serviceIt->duration;
+        if (!expertIt->canWork(hoursRequired) || expertIt->hoursWorked + hoursRequired > expertIt->maxHoursPerWeek) {
+            cout << "Expert cannot accommodate this booking due to their schedule." << endl;
+            return;
+        }
+
+        // Check if the expert has already worked 6 hours this week for treatments or consultations
+        int hoursThisWeek = 0;
+        if (expertIt->schedule.find(month) != expertIt->schedule.end()) {
+            for (const int& bookedDay : expertIt->schedule[month]) {
+                hoursThisWeek += 2; // Assuming each booking is for 2 hours
+            }
+        }
+
+        if (hoursThisWeek + hoursRequired > 6) {
+            cout << "Expert cannot work more than 6 hours for treatments or consultations this week." << endl;
+            return;
+        }
+
+        // Check if all slots are fully booked
+        if (expertIt->hoursWorked + hoursRequired > expertIt->maxHoursPerWeek) {
+            cout << "All slots for this expert are fully booked. Booking function is deactivated." << endl;
+            return;
+        }
+
+        auto customerIt = find_if(customers.begin(), customers.end(), [&](const Customer& c) { return caseInsensitiveEqual(c.name, customerName); });
+        if (customerIt == customers.end()) {
+            customers.push_back(Customer(customerName));
+            customerIt = --customers.end();
+        }
+
+        customerIt->bookedServices.push_back(make_tuple(serviceName, month, expertName));
+        expertIt->addSchedule(month, day);
+        expertIt->hoursWorked += serviceIt->duration;
+
+        cout << "Service booked successfully!" << endl;
+    }
+
+    void viewBookedSchedule() {
+        string customerName;
+        cout << "Enter customer name: ";
+        cin >> customerName;
+
+        auto customerIt = find_if(customers.begin(), customers.end(), [&](const Customer& c) { return caseInsensitiveEqual(c.name, customerName); });
+        if (customerIt == customers.end()) {
+            cout << "Customer not found." << endl;
+            return;
+        }
+
+        cout << "Booked Services for " << customerName << ":" << endl;
+        for (const auto& booking : customerIt->bookedServices) {
+            cout << "Service: " << get<0>(booking)
+                << ", Month: " << get<1>(booking)
+                << ", Expert: " << get<2>(booking) << endl;
+        }
+        cout << endl;
+    }
+
+    void viewIndividualSchedule(const string& expertName) {
+        auto expertIt = find_if(experts.begin(), experts.end(), [&](const Expert& e) { return caseInsensitiveEqual(e.name, expertName); });
+
+        if (expertIt != experts.end()) {
+            cout << "Schedule for expert " << expertName << ":\n";
+            for (const auto& month_days_pair : expertIt->schedule) {
+                int month = month_days_pair.first;
+                const vector<int>& days = month_days_pair.second;
+
+                cout << "Month " << month << ": ";
+                for (size_t i = 0; i < days.size(); ++i) {
+                    cout << days[i] << " ";
+                }
+                cout << endl;
+            }
+        }
+        else {
+            cout << "Expert not found.\n";
+        }
+    }
+
+    void viewOverallSchedule() {
+        cout << "Overall Schedule:" << endl;
+        for (const auto& expert : experts) {
+            cout << "Expert: " << expert.name << endl;
+            viewIndividualSchedule(expert.name);
+        }
+    }
+
+    void viewCustomers() {
+        cout << "Customers:" << endl;
+        for (const auto& customer : customers) {
+            cout << "Customer: " << customer.name << endl;
+        }
+        cout << endl;
+    }
+
+    void generateSalesReport() {
+        double totalSales = 0.0;
+        for (const auto& customer : customers) {
+            for (const auto& booking : customer.bookedServices) {
+                const string& serviceName = get<0>(booking);
+
+                // Find the service by name
+                auto serviceIt = find_if(services.begin(), services.end(),
+                    [&](const Service& s) { return caseInsensitiveEqual(s.name, serviceName); });
+                if (serviceIt != services.end()) {
+                    totalSales += serviceIt->price;
+                }
+            }
+        }
+        cout << "Total Sales: $" << fixed << setprecision(2) << totalSales << endl;
+    }
+};
+
+int main() {
+    BeautyServiceApp app;
+    app.showLogo();
+    app.showMainMenu();
+    return 0;
+}
