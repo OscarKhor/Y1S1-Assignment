@@ -1,9 +1,8 @@
 #include <iostream>
-#include <vector>
 #include <string>
 #include <map>
 #include <iomanip>
-#include <algorithm> // For transform and equal
+#include <cctype>  // For tolower
 
 using namespace std;
 
@@ -12,7 +11,7 @@ public:
     string name;
     double price;
     int duration; // Duration in hours
-    Service(string n, double p, int d) : name(n), price(p), duration(d) {}
+    Service(string n = "", double p = 0.0, int d = 0) : name(n), price(p), duration(d) {}
 };
 
 class Expert {
@@ -20,50 +19,81 @@ public:
     string name;
     int maxHoursPerWeek;
     int hoursWorked;
-    map<int, vector<int>> schedule; // <month, days booked>
+    int hoursPerDay[12][30]; // Hours booked per day in each month
 
-    Expert(string n) : name(n), maxHoursPerWeek(30), hoursWorked(0) {}
+    Expert(string n = "") : name(n), maxHoursPerWeek(30), hoursWorked(0) {
+        // Initialize all days to 0 hours booked
+        for (int month = 0; month < 12; ++month) {
+            for (int day = 0; day < 30; ++day) {
+                hoursPerDay[month][day] = 0;
+            }
+        }
+    }
 
-    bool canWork(int additionalHours) const {
+    bool canWork(double additionalHours) const {
         return (hoursWorked + additionalHours <= maxHoursPerWeek);
     }
 
-    void addSchedule(int month, int day) {
-        schedule[month].push_back(day);
+    bool canAddHours(int month, int day, double additionalHours) const {
+        return (hoursPerDay[month - 1][day - 1] + additionalHours <= 6); //  6 hours max per day
+    }
+
+    void addHours(int month, int day, double additionalHours) {
+        hoursPerDay[month - 1][day - 1] += additionalHours;
+        hoursWorked += additionalHours;
     }
 };
 
 class Customer {
 public:
     string name;
-    vector<tuple<string, int, string>> bookedServices; // Service name, month-day pair, and expert name
-    Customer(string n) : name(n) {}
+    struct Booking {
+        string serviceName;
+        int month;
+        string expertName;
+    };
+    Booking bookedServices[100]; // Array of bookings, assuming max 100 bookings
+    int bookingCount;
+
+    Customer(string n = "") : name(n), bookingCount(0) {}
 };
 
 class BeautyServiceApp {
 private:
-    vector<Service> services;
-    vector<Expert> experts;
-    vector<Customer> customers;
+    Service services[10]; // Assuming max 10 services
+    Expert experts[10];   // Assuming max 10 experts
+    Customer customers[100]; // Assuming max 100 customers
+    int serviceCount;
+    int expertCount;
+    int customerCount;
+
+    // For admin login and registration
+    map<string, string> adminCredentials; // Stores admin credentials
+    bool isAdminLoggedIn = false; // Flag to track admin login status
 
     // Simplified case-insensitive comparison function
     static bool caseInsensitiveEqual(const string& str1, const string& str2) {
         if (str1.size() != str2.size()) return false;
-        return equal(str1.begin(), str1.end(), str2.begin(), str2.end(), [](char a, char b) {
-            return tolower(a) == tolower(b);
-            });
+        for (size_t i = 0; i < str1.size(); ++i) {
+            if (tolower(str1[i]) != tolower(str2[i])) return false;
+        }
+        return true;
     }
 
 public:
-    BeautyServiceApp() {
+    BeautyServiceApp() : serviceCount(0), expertCount(0), customerCount(0) {
         // Initialize services and experts
-        services.push_back(Service("Facial", 50.0, 2));
-        services.push_back(Service("Makeup", 70.0, 2));
-        services.push_back(Service("Manicure", 30.0, 2));
-        services.push_back(Service("Consultation", 20.0, 1)); 
-        experts.push_back(Expert("Alice"));
-        experts.push_back(Expert("Bob"));
-        experts.push_back(Expert("Cathy"));
+        services[serviceCount++] = Service("Facial", 50.0, 2);
+        services[serviceCount++] = Service("Makeup", 70.0, 2);
+        services[serviceCount++] = Service("Manicure", 30.0, 2);
+        services[serviceCount++] = Service("Consultation", 20.0, 1);
+
+        experts[expertCount++] = Expert("Alice");
+        experts[expertCount++] = Expert("Bob");
+        experts[expertCount++] = Expert("Cathy");
+
+        // Adding a default admin (for initial testing)
+        adminCredentials["admin"] = "adminpass";
     }
 
     void showLogo() {
@@ -86,19 +116,18 @@ public:
         cout << "\033[0m";
         cout << "\n";
     }
-
     void showMainMenu() {
         int choice;
         do {
             cout << "1. Customer Menu" << endl;
-            cout << "2. Admin/Expert Menu" << endl;
+                      cout << "2. Admin Menu" << endl;
             cout << "3. Exit" << endl;
             cout << "Enter your choice: ";
             cin >> choice;
 
             switch (choice) {
             case 1: customerMenu(); break;
-            case 2: adminExpertMenu(); break;
+            case 2: adminMenu(); break;
             case 3: cout << "Exiting..." << endl; break;
             default: cout << "Invalid choice. Please try again." << endl;
             }
@@ -129,32 +158,85 @@ public:
         } while (choice != 6);
     }
 
-    void adminExpertMenu() {
-        int choice;
-        do {
-            cout << "1. View Individual Schedule" << endl;
-            cout << "2. View Overall Schedule" << endl;
-            cout << "3. View Customers" << endl;
-            cout << "4. Generate Sales Report" << endl;
-            cout << "5. Back to Main Menu" << endl;
+    void adminMenu() {
+        if (!isAdminLoggedIn) {
+            cout << "1. Register Admin" << endl;
+            cout << "2. Login Admin" << endl;
+            cout << "3. Back to Main Menu" << endl;
             cout << "Enter your choice: ";
+            int choice;
             cin >> choice;
 
             switch (choice) {
-            case 1: {
-                string expertName;
-                cout << "Enter the expert's name: ";
-                cin >> expertName;
-                viewIndividualSchedule(expertName);
-                break;
+            case 1: registerAdmin(); break;
+            case 2: loginAdmin(); break;
+            case 3: break;
+            default: cout << "Invalid choice. Please try again." << endl;
             }
-            case 2: viewOverallSchedule(); break;
-            case 3: viewCustomers(); break;
-            case 4: generateSalesReport(); break;
-            case 5: break;
-            default: cout << "Invalid choice. Try again." << endl;
-            }
-        } while (choice != 5);
+        }
+        else {
+            int choice;
+            do {
+                cout << "1. View Individual Schedule" << endl;
+                cout << "2. View Overall Schedule" << endl;
+                cout << "3. View Customers" << endl;
+                cout << "4. Generate Sales Report" << endl;
+                cout << "5. Logout" << endl;
+                cout << "6. Back to Main Menu" << endl;
+                cout << "Enter your choice: ";
+                cin >> choice;
+
+                switch (choice) {
+                case 1: {
+                    string expertName;
+                    cout << "Enter the expert's name: ";
+                    cin >> expertName;
+                    viewIndividualSchedule(expertName);
+                    break;
+                }
+                case 2: viewOverallSchedule(); break;
+                case 3: viewCustomers(); break;
+                case 4: generateSalesReport(); break;
+                case 5:
+                    isAdminLoggedIn = false;
+                    cout << "Logged out successfully." << endl;
+                    return; // Return to main menu after logout
+                case 6: return; // Return to main menu if selected
+                default: cout << "Invalid choice. Try again." << endl;
+                }
+            } while (choice != 6);
+        }
+    }
+
+    void registerAdmin() {
+        string username, password;
+        cout << "Enter a new username: ";
+        cin >> username;
+        cout << "Enter a new password: ";
+        cin >> password;
+
+        if (adminCredentials.find(username) != adminCredentials.end()) {
+            cout << "Username already exists. Please try again." << endl;
+        } else {
+            adminCredentials[username] = password;
+            cout << "Registration successful. You can now log in." << endl;
+        }
+    }
+
+    void loginAdmin() {
+        string username, password;
+        cout << "Enter username: ";
+        cin >> username;
+        cout << "Enter password: ";
+        cin >> password;
+
+        if (adminCredentials.find(username) != adminCredentials.end() &&
+            adminCredentials[username] == password) {
+            isAdminLoggedIn = true;
+            cout << "Login successful. Welcome, " << username << "!" << endl;
+        } else {
+            cout << "Invalid username or password. Please try again." << endl;
+        }
     }
 
     void viewOrganizationDetails() {
@@ -169,7 +251,7 @@ public:
         cout << "Facials           : Rejuvenate your skin with our custom facials." << endl;
         cout << "Makeup Application: Perfect your look for any occasion with our expert makeup artists." << endl;
         cout << "Manicure          : Improves the overall look of your nails and hands." << endl;
-        cout << "Consultation      : Get personalized beauty advice and recommendations." << endl; // New service description
+        cout << "Consultation      : Get personalized beauty advice and recommendations." << endl;
         cout << endl;
         cout << "Location          : 123 Beauty St." << endl;
         cout << endl;
@@ -191,200 +273,262 @@ public:
         cout << setfill('-') << setw(80) << "" << setfill(' ') << endl;
 
         // Display services and prices
-        for (const auto& service : services) {
-            cout << left << setw(25) << service.name;
-            cout << setw(10) << fixed << setprecision(2) << service.price;
-            cout << setw(15) << service.duration;
-
-            // Find and display available experts for the service
-            string expertsList;
-            for (const auto& expert : experts) {
-                // Assume all experts can provide all services for simplicity
-                expertsList += expert.name + ", ";
+        for (int i = 0; i < serviceCount; ++i) {
+            cout << left << setw(25) << services[i].name;
+            cout << setw(10) << fixed << setprecision(2) << services[i].price;
+            cout << setw(15) << services[i].duration;
+            bool first = true;
+            for (int j = 0; j < expertCount; ++j) {
+                if (first) {
+                    cout << experts[j].name;
+                    first = false;
+                }
+                else {
+                    cout << ", " << experts[j].name;
+                }
             }
-
-            // Remove the trailing comma and space
-            if (!expertsList.empty()) {
-                expertsList.pop_back(); // Remove the last space
-                expertsList.pop_back(); // Remove the last comma
-            }
-
-            cout << setw(30) << expertsList << endl;
+            cout << endl;
         }
-
         cout << setfill('-') << setw(80) << "" << setfill(' ') << endl;
         cout << endl;
     }
 
+    void checkSchedule() {
+        string expertName;
+        cout << "Enter the expert's name: ";
+        cin >> expertName;
 
-    void showCalendar(int month) {
-        const int daysInMonth = 30; // Simplified month length
-        cout << "Sun  Mon  Tue  Wed  Thu  Fri  Sat\n";
-        for (int i = 1; i <= daysInMonth; ++i) {
-            bool booked = false;
-            for (const auto& expert : experts) {
-                if (expert.schedule.find(month) != expert.schedule.end()) {
-                    if (find(expert.schedule.at(month).begin(), expert.schedule.at(month).end(), i) != expert.schedule.at(month).end()) {
-                        booked = true;
-                        break;
+        Expert* expert = nullptr;
+        for (int i = 0; i < expertCount; ++i) {
+            if (caseInsensitiveEqual(experts[i].name, expertName)) {
+                expert = &experts[i];
+                break;
+            }
+        }
+
+        if (expert) {
+            cout << "Schedule for " << expert->name << ":" << endl;
+            cout << setfill('-') << setw(50) << "" << setfill(' ') << endl;
+            cout << left << setw(15) << "Month" << setw(15) << "Day" << setw(20) << "Hours Booked" << endl;
+            cout << setfill('-') << setw(50) << "" << setfill(' ') << endl;
+
+            for (int month = 0; month < 12; ++month) {
+                for (int day = 0; day < 30; ++day) {
+                    if (expert->hoursPerDay[month][day] > 0) {
+                        cout << left << setw(15) << month + 1 << setw(15) << day + 1 << setw(20) << expert->hoursPerDay[month][day] << endl;
                     }
                 }
             }
-            cout << setw(3) << i << (booked ? "*" : " ") << " ";
-            if (i % 7 == 0) cout << "\n";
+            cout << setfill('-') << setw(50) << "" << setfill(' ') << endl;
         }
-        cout << "\n";
-    }
-
-    void checkSchedule() {
-        int month;
-        cout << "Enter the month (1-12): ";
-        cin >> month;
-        cout << "Schedule for month " << month << ":\n";
-        showCalendar(month);
+        else {
+            cout << "Expert not found!" << endl;
+        }
+        cout << endl;
     }
 
     void bookService() {
         string customerName;
         string serviceName;
-        int month;
-        int day;
         string expertName;
+        int month, day;
 
         cout << "Enter your name: ";
         cin >> customerName;
-        cout << "Enter service name: ";
+        cout << "Enter the service name: ";
         cin >> serviceName;
-        cout << "Enter month (1-12): ";
-        cin >> month;
-        cout << "Enter day (1-30): ";
-        cin >> day;
-        cout << "Enter expert's name: ";
+        cout << "Enter the expert's name: ";
         cin >> expertName;
+        cout << "Enter the month (1-12): ";
+        cin >> month;
+        cout << "Enter the day (1-30): ";
+        cin >> day;
 
-        auto serviceIt = find_if(services.begin(), services.end(), [&](const Service& s) { return caseInsensitiveEqual(s.name, serviceName); });
-        if (serviceIt == services.end()) {
-            cout << "Service not found." << endl;
-            return;
-        }
+        bool serviceFound = false;
+        bool expertFound = false;
 
-        auto expertIt = find_if(experts.begin(), experts.end(), [&](const Expert& e) { return caseInsensitiveEqual(e.name, expertName); });
-        if (expertIt == experts.end()) {
-            cout << "Expert not found." << endl;
-            return;
-        }
+        Service* selectedService = nullptr;
+        Expert* selectedExpert = nullptr;
 
-        // Check if the expert can accommodate this booking
-        int hoursRequired = serviceIt->duration;
-        if (!expertIt->canWork(hoursRequired) || expertIt->hoursWorked + hoursRequired > expertIt->maxHoursPerWeek) {
-            cout << "Expert cannot accommodate this booking due to their schedule." << endl;
-            return;
-        }
-
-        // Check if the expert has already worked 6 hours this week for treatments or consultations
-        int hoursThisWeek = 0;
-        if (expertIt->schedule.find(month) != expertIt->schedule.end()) {
-            for (const int& bookedDay : expertIt->schedule[month]) {
-                hoursThisWeek += 2; // Assuming each booking is for 2 hours
+        // Find the service
+        for (int i = 0; i < serviceCount; ++i) {
+            if (caseInsensitiveEqual(services[i].name, serviceName)) {
+                selectedService = &services[i];
+                serviceFound = true;
+                break;
             }
         }
 
-        if (hoursThisWeek + hoursRequired > 6) {
-            cout << "Expert cannot work more than 6 hours for treatments or consultations this week." << endl;
+        // Find the expert
+        for (int i = 0; i < expertCount; ++i) {
+            if (caseInsensitiveEqual(experts[i].name, expertName)) {
+                selectedExpert = &experts[i];
+                expertFound = true;
+                break;
+            }
+        }
+
+        if (!serviceFound || !expertFound) {
+            cout << "Service or Expert not found. Please check the names and try again." << endl;
             return;
         }
 
-        // Check if all slots are fully booked
-        if (expertIt->hoursWorked + hoursRequired > expertIt->maxHoursPerWeek) {
-            cout << "All slots for this expert are fully booked. Booking function is deactivated." << endl;
+        // Check if the expert has enough total hours available
+        if (!selectedExpert->canWork(selectedService->duration)) {
+            cout << "Expert does not have enough total hours available." << endl;
             return;
         }
 
-        auto customerIt = find_if(customers.begin(), customers.end(), [&](const Customer& c) { return caseInsensitiveEqual(c.name, customerName); });
-        if (customerIt == customers.end()) {
-            customers.push_back(Customer(customerName));
-            customerIt = --customers.end();
+        // Check if adding the service's duration on the selected day is possible
+        if (!selectedExpert->canAddHours(month, day, selectedService->duration)) {
+            cout << "The selected day has reached its maximum allowed hours." << endl;
+            return;
         }
 
-        customerIt->bookedServices.push_back(make_tuple(serviceName, month, expertName));
-        expertIt->addSchedule(month, day);
-        expertIt->hoursWorked += serviceIt->duration;
+        // Proceed to book the service
+        selectedExpert->addHours(month, day, selectedService->duration);
+
+        // Find or create the customer
+        Customer* customer = nullptr;
+        for (int i = 0; i < customerCount; ++i) {
+            if (caseInsensitiveEqual(customers[i].name, customerName)) {
+                customer = &customers[i];
+                break;
+            }
+        }
+
+        if (!customer) {
+            customer = &customers[customerCount++];
+            customer->name = customerName;
+        }
+
+        customer->bookedServices[customer->bookingCount].serviceName = serviceName;
+        customer->bookedServices[customer->bookingCount].month = month;
+        customer->bookedServices[customer->bookingCount].expertName = expertName;
+        customer->bookingCount++;
 
         cout << "Service booked successfully!" << endl;
     }
 
     void viewBookedSchedule() {
         string customerName;
-        cout << "Enter customer name: ";
+        cout << "Enter your name: ";
         cin >> customerName;
 
-        auto customerIt = find_if(customers.begin(), customers.end(), [&](const Customer& c) { return caseInsensitiveEqual(c.name, customerName); });
-        if (customerIt == customers.end()) {
-            cout << "Customer not found." << endl;
-            return;
+        Customer* customer = nullptr;
+        for (int i = 0; i < customerCount; ++i) {
+            if (caseInsensitiveEqual(customers[i].name, customerName)) {
+                customer = &customers[i];
+                break;
+            }
         }
 
-        cout << "Booked Services for " << customerName << ":" << endl;
-        for (const auto& booking : customerIt->bookedServices) {
-            cout << "Service: " << get<0>(booking)
-                << ", Month: " << get<1>(booking)
-                << ", Expert: " << get<2>(booking) << endl;
+        if (customer) {
+            cout << "Booked Services for " << customer->name << ":" << endl;
+            cout << setfill('-') << setw(50) << "" << setfill(' ') << endl;
+            cout << left << setw(20) << "Service Name" << setw(15) << "Month" << setw(15) << "Expert Name" << endl;
+            cout << setfill('-') << setw(50) << "" << setfill(' ') << endl;
+
+            for (int i = 0; i < customer->bookingCount; ++i) {
+                cout << left << setw(20) << customer->bookedServices[i].serviceName;
+                cout << setw(15) << customer->bookedServices[i].month;
+                cout << setw(15) << customer->bookedServices[i].expertName << endl;
+            }
+
+            cout << setfill('-') << setw(50) << "" << setfill(' ') << endl;
+        }
+        else {
+            cout << "No bookings found for " << customerName << "." << endl;
         }
         cout << endl;
     }
 
     void viewIndividualSchedule(const string& expertName) {
-        auto expertIt = find_if(experts.begin(), experts.end(), [&](const Expert& e) { return caseInsensitiveEqual(e.name, expertName); });
-
-        if (expertIt != experts.end()) {
-            cout << "Schedule for expert " << expertName << ":\n";
-            for (const auto& month_days_pair : expertIt->schedule) {
-                int month = month_days_pair.first;
-                const vector<int>& days = month_days_pair.second;
-
-                cout << "Month " << month << ": ";
-                for (size_t i = 0; i < days.size(); ++i) {
-                    cout << days[i] << " ";
-                }
-                cout << endl;
+        Expert* expert = nullptr;
+        for (int i = 0; i < expertCount; ++i) {
+            if (caseInsensitiveEqual(experts[i].name, expertName)) {
+                expert = &experts[i];
+                break;
             }
         }
+
+        if (expert) {
+            cout << "Schedule for " << expert->name << ":" << endl;
+            cout << setfill('-') << setw(80) << "" << setfill(' ') << endl;
+            cout << left << setw(15) << "Month" << setw(15) << "Day" << setw(20) << "Hours Booked" << endl;
+            cout << setfill('-') << setw(80) << "" << setfill(' ') << endl;
+
+            for (int month = 0; month < 12; ++month) {
+                for (int day = 0; day < 30; ++day) {
+                    if (expert->hoursPerDay[month][day] > 0) {
+                        cout << left << setw(15) << month + 1 << setw(15) << day + 1 << setw(20) << expert->hoursPerDay[month][day] << endl;
+                    }
+                }
+            }
+            cout << setfill('-') << setw(80) << "" << setfill(' ') << endl;
+        }
         else {
-            cout << "Expert not found.\n";
-        }
-    }
-
-    void viewOverallSchedule() {
-        cout << "Overall Schedule:" << endl;
-        for (const auto& expert : experts) {
-            cout << "Expert: " << expert.name << endl;
-            viewIndividualSchedule(expert.name);
-        }
-    }
-
-    void viewCustomers() {
-        cout << "Customers:" << endl;
-        for (const auto& customer : customers) {
-            cout << "Customer: " << customer.name << endl;
+            cout << "Expert not found!" << endl;
         }
         cout << endl;
     }
 
-    void generateSalesReport() {
-        double totalSales = 0.0;
-        for (const auto& customer : customers) {
-            for (const auto& booking : customer.bookedServices) {
-                const string& serviceName = get<0>(booking);
+    void viewOverallSchedule() {
+        cout << "Overall Schedule:" << endl;
+        cout << setfill('-') << setw(80) << "" << setfill(' ') << endl;
+        cout << left << setw(15) << "Expert" << setw(15) << "Month" << setw(15) << "Day" << setw(20) << "Hours Booked" << endl;
+        cout << setfill('-') << setw(80) << "" << setfill(' ') << endl;
 
-                // Find the service by name
-                auto serviceIt = find_if(services.begin(), services.end(),
-                    [&](const Service& s) { return caseInsensitiveEqual(s.name, serviceName); });
-                if (serviceIt != services.end()) {
-                    totalSales += serviceIt->price;
+        for (int i = 0; i < expertCount; ++i) {
+            for (int month = 0; month < 12; ++month) {
+                for (int day = 0; day < 30; ++day) {
+                    if (experts[i].hoursPerDay[month][day] > 0) {
+                        cout << left << setw(15) << experts[i].name << setw(15) << month + 1 << setw(15) << day + 1 << setw(20) << experts[i].hoursPerDay[month][day] << endl;
+                    }
                 }
             }
         }
-        cout << "Total Sales: $" << fixed << setprecision(2) << totalSales << endl;
+        cout << setfill('-') << setw(80) << "" << setfill(' ') << endl;
+        cout << endl;
+    }
+
+    void viewCustomers() {
+        cout << "List of Customers:" << endl;
+        cout << setfill('-') << setw(30) << "" << setfill(' ') << endl;
+        cout << left << setw(25) << "Customer Name" << endl;
+        cout << setfill('-') << setw(30) << "" << setfill(' ') << endl;
+
+        for (int i = 0; i < customerCount; ++i) {
+            cout << left << setw(25) << customers[i].name << endl;
+        }
+        cout << setfill('-') << setw(30) << "" << setfill(' ') << endl;
+        cout << endl;
+    }
+
+    void generateSalesReport() {
+        cout << "Sales Report:" << endl;
+        cout << setfill('-') << setw(50) << "" << setfill(' ') << endl;
+        cout << left << setw(20) << "Service Name" << setw(15) << "Total Sales" << endl;
+        cout << setfill('-') << setw(50) << "" << setfill(' ') << endl;
+
+        double sales[10] = { 0 }; // Assuming 10 services
+        for (int i = 0; i < customerCount; ++i) {
+            for (int j = 0; j < customers[i].bookingCount; ++j) {
+                for (int k = 0; k < serviceCount; ++k) {
+                    if (caseInsensitiveEqual(services[k].name, customers[i].bookedServices[j].serviceName)) {
+                        sales[k] += services[k].price;
+                    }
+                }
+            }
+        }
+
+        for (int i = 0; i < serviceCount; ++i) {
+            cout << left << setw(20) << services[i].name;
+            cout << setw(15) << fixed << setprecision(2) << sales[i] << endl;
+        }
+
+        cout << setfill('-') << setw(50) << "" << setfill(' ') << endl;
+        cout << endl;
     }
 };
 
