@@ -1,0 +1,76 @@
+#include <iostream>
+#include <iomanip>
+#include <string>
+
+using namespace std;
+
+// Function to read customer details
+void read_customer_details(string& cust_number, string& cust_name, string& cust_address, double& water_usage) {
+    cout << "Enter customer number: ";
+    cin >> cust_number;
+    cout << "Enter customer name: ";
+    cin.ignore();  // To consume the newline character left by previous input
+    getline(cin, cust_name);
+    cout << "Enter customer address: ";
+    getline(cin, cust_address);
+
+    do {
+        cout << "Enter water usage: ";
+        cin >> water_usage;
+        if (water_usage < 0) {
+            cout << "Invalid, try again." << endl;
+        }
+    } while (water_usage < 0);
+}
+
+// Function to calculate the amount owing based on updated rates
+double calculate_amount_owing(double water_usage) {
+    double amount_owing = 0;
+
+    if (water_usage <= 60) {
+        amount_owing = water_usage * 2.00;
+    }
+    else {
+        amount_owing = 60 * 1.75 + (water_usage - 60) * 1.50;
+    }
+
+    return amount_owing;
+}
+
+// Function to display totals
+void print_water_usage_figures(int total_customers, double total_water_usage, double total_amount_owing) {
+    cout << "\nWater Supply Billing" << endl;
+    cout << "----------------------" << endl;
+    cout << "Total number of customers: " << total_customers << endl;
+    cout << "Total water usage: " << total_water_usage << " liters" << endl;
+    cout << "Total amount owing: RM" << fixed << setprecision(2) << total_amount_owing << endl;
+}
+
+int main() {
+    string cust_number, cust_name, cust_address;
+    double water_usage, amount_owing;
+    char continue_program;
+    int total_customers = 0;
+    double total_water_usage = 0, total_amount_owing = 0;
+
+    do {
+        cout << "\nWater Supply Billing" << endl;
+        cout << "----------------------" << endl;
+        read_customer_details(cust_number, cust_name, cust_address, water_usage);
+        amount_owing = calculate_amount_owing(water_usage);
+
+        // Update totals
+        total_customers++;
+        total_water_usage += water_usage;
+        total_amount_owing += amount_owing;
+
+        // Ask user if they want to continue
+        cout << "\nEnter more records? (Y or N):";
+        cin >> continue_program;
+    } while (continue_program == 'y' || continue_program == 'Y');
+
+    // Display totals
+    print_water_usage_figures(total_customers, total_water_usage, total_amount_owing);
+
+    return 0;
+}
