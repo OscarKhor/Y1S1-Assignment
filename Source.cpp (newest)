@@ -88,9 +88,9 @@ public:
         services[serviceCount++] = Service("Manicure", 30.0, 2);
         services[serviceCount++] = Service("Consultation", 20.0, 1);
 
-        experts[expertCount++] = Expert("Alice");
-        experts[expertCount++] = Expert("Bob");
-        experts[expertCount++] = Expert("Cathy");
+        experts[expertCount++] = Expert("Martha");
+        experts[expertCount++] = Expert("Helena");
+        experts[expertCount++] = Expert("Elizabeth");
 
         // Adding a default admin (for initial testing)
         adminCredentials["admin"] = "adminpass";
@@ -98,24 +98,20 @@ public:
 
     void showLogo() {
         cout << "\033[1;36m";
-        cout << "*****   *****     ****      **  **  ******  **  **\n";
-        cout << "**  **  **       **  **     **  **    **     **** \n";
-        cout << "*****   ****    ********    **  **    **      **  \n";
-        cout << "**  **  **     **      **   **  **    **      **  \n";
-        cout << "*****   ***** **        **   ****     **      **  \n";
-        cout << "\033[0m";
-
-        cout << endl;
-
-        cout << "\033[1;35m";
-        cout << "*****  *****  ****    **   **  ******  ******  *****   *****\n";
-        cout << "**     **     **  **   ** **     **    **      **      **   \n";
-        cout << "*****  ****   ******    ***      **    **      ****    *****\n";
-        cout << "   **  **     ** **     ***      **    **      **         **\n";
-        cout << "*****  *****  **  **     *     ******  ******  *****   *****\n";
-        cout << "\033[0m";
-        cout << "\n";
+ cout << "        ***********************  \n";
+ cout << "      ***               *** ***  \n";
+ cout << "    ***                ***  ***  \n";
+ cout << "  ***                 ***   ***  \n";
+ cout << "************************    ***  \n";
+ cout << "***   *****   *****  ***    ***  \n";
+ cout << "***  ++       **  ** ***    ***  \n";
+ cout << "*** **   **** *****  ***   ***   \n";
+ cout << "***  **   **  **  ** ***  ***    \n";
+ cout << "***   ******  *****  *** ***     \n";
+ cout << "***************************      \n";
+ cout << "\033[0m";
     }
+
     void showMainMenu() {
         int choice;
         do {
@@ -241,10 +237,10 @@ public:
 
     void viewOrganizationDetails() {
         cout << endl;
-        cout << "Welcome to Beauty Services!" << endl;
+        cout << "Welcome to Great Beauty!" << endl;
         cout << endl;
         cout << "About Us:" << endl;
-        cout << "Beauty Services, founded in 2010, focuses on delivering cutting-edge skincare and beauty solutions." << endl;
+        cout << "Great Beauty, founded in 2010, focuses on delivering cutting-edge skincare and beauty solutions." << endl;
         cout << "Our mission is to prioritize quality, safety, and efficacy in all our services." << endl;
         cout << endl;
         cout << "Our services:" << endl;
@@ -253,16 +249,16 @@ public:
         cout << "Manicure          : Improves the overall look of your nails and hands." << endl;
         cout << "Consultation      : Get personalized beauty advice and recommendations." << endl;
         cout << endl;
-        cout << "Location          : 123 Beauty St." << endl;
+        cout << "Location          : 123 Beauty St, fantasy valheim." << endl;
         cout << endl;
         cout << "Online Presence:" << endl;
-        cout << "Google            : www.Beautyservices.com" << endl;
-        cout << "Instagram         : @Beautyservices" << endl;
-        cout << "Facebook          : /Beautyservices" << endl;
+        cout << "Google            : www.Greatbeauty.com" << endl;
+        cout << "Instagram         : @Greatbeauty" << endl;
+        cout << "Facebook          : /Greatbeauty" << endl;
         cout << endl;
         cout << "Customer Support:" << endl;
         cout << "Contact           : 555-1234" << endl;
-        cout << "Email             : BeautyServices@gmail.com" << endl;
+        cout << "Email             : Greatbeauty@gmail.com" << endl;
         cout << endl;
     }
 
