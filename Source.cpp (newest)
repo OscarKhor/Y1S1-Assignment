@@ -2,8 +2,11 @@
 #include <string>
 #include <map>
 #include <iomanip>
-#include <cctype>  // For tolower
-
+#include <cctype> 
+#include <conio.h>
+#include <fstream>
+#include <sstream>
+#include <algorithm> // For sorting
 using namespace std;
 
 class Service {
@@ -16,33 +19,62 @@ public:
 
 class Expert {
 public:
-    string name;
-    int maxHoursPerWeek;
-    int hoursWorked;
-    int hoursPerDay[12][30]; // Hours booked per day in each month
+        string name;
+        int maxHoursPerWeek;
+        int hoursWorked;
+        int weeklyHours[52]; // Track hours worked per week (52 weeks in a year)
+        map<int, map<int, bool>> timeSlots[12]; // Track booked times per month, day, and hour
 
-    Expert(string n = "") : name(n), maxHoursPerWeek(30), hoursWorked(0) {
-        // Initialize all days to 0 hours booked
-        for (int month = 0; month < 12; ++month) {
-            for (int day = 0; day < 30; ++day) {
-                hoursPerDay[month][day] = 0;
+        Expert(string n = "") : name(n), maxHoursPerWeek(30), hoursWorked(0) {
+            // Initialize time slots as unbooked (false)
+            for (int month = 0; month < 12; ++month) {
+                for (int day = 1; day <= 30; ++day) {
+                    for (int hour = 8; hour < 19; ++hour) { // Shop hours are 8am - 7pm
+                        timeSlots[month][day][hour] = false;
+                    }
+                }
+            }
+            for (int week = 0; week < 52; ++week) {
+                weeklyHours[week] = 0; // Initialize weekly hours to 0
             }
         }
-    }
 
-    bool canWork(double additionalHours) const {
-        return (hoursWorked + additionalHours <= maxHoursPerWeek);
-    }
+        // Check if the expert is available for the selected time slot, considering the service duration
+        bool isAvailable(int month, int day, int startHour, int duration, int week) {
+            // Check if the selected time slot is available for the expert
+            for (int i = 0; i < duration; ++i) {
+                if (startHour + i >= 19 || timeSlots[month - 1][day][startHour + i]) {
+                    return false; // Time slot is already booked or exceeds shop hours
+                }
+            }
+            // Check daily limit (6 hours per day)
+            int dailyHours = 0;
+            for (int hour = 8; hour < 19; ++hour) {
+                if (timeSlots[month - 1][day][hour]) {
+                    dailyHours++;
+                }
+            }
+            if (dailyHours + duration > 6) {
+                return false; // Exceeds daily hour limit
+            }
 
-    bool canAddHours(int month, int day, double additionalHours) const {
-        return (hoursPerDay[month - 1][day - 1] + additionalHours <= 6); //  6 hours max per day
-    }
+            // Check weekly limit (30 hours per week)
+            if (weeklyHours[week] + duration > 30) {
+                return false; // Exceeds weekly hour limit
+            }
 
-    void addHours(int month, int day, double additionalHours) {
-        hoursPerDay[month - 1][day - 1] += additionalHours;
-        hoursWorked += additionalHours;
-    }
-};
+            return true;
+        }
+
+        // Book the time slot for the expert and update daily/weekly hours
+        void bookTime(int month, int day, int startHour, int duration, int week) {
+            for (int i = 0; i < duration; ++i) {
+                timeSlots[month - 1][day][startHour + i] = true;
+            }
+            hoursWorked += duration;
+            weeklyHours[week] += duration;
+        }
+    };
 
 class Customer {
 public:
@@ -50,6 +82,7 @@ public:
     struct Booking {
         string serviceName;
         int month;
+        int day;
         string expertName;
     };
     Booking bookedServices[100]; // Array of bookings, assuming max 100 bookings
@@ -60,16 +93,38 @@ public:
 
 class BeautyServiceApp {
 private:
-    Service services[10]; // Assuming max 10 services
-    Expert experts[10];   // Assuming max 10 experts
-    Customer customers[100]; // Assuming max 100 customers
+    Service services[4]; // max 4 services (Facial, Makeup, Manicure, Consultation)
+    Expert experts[3];   // max 3 experts
     int serviceCount;
     int expertCount;
-    int customerCount;
 
     // For admin login and registration
     map<string, string> adminCredentials; // Stores admin credentials
     bool isAdminLoggedIn = false; // Flag to track admin login status
+
+    // Load admin credentials from a file
+    void loadAdminCredentials() {
+        ifstream file("AdminCredentials.txt");
+        if (file.is_open()) {
+            string username, password;
+            while (getline(file, username) && getline(file, password)) {
+                adminCredentials[username] = password;
+            }
+            file.close();
+        }
+    }
+
+    // Save admin credentials to a file
+    void saveAdminCredentials() {
+        ofstream file("AdminCredentials.txt");
+        if (file.is_open()) {
+            map<string, string>::iterator it;
+            for (it = adminCredentials.begin(); it != adminCredentials.end(); ++it) {
+                file << it->first << endl << it->second << endl;
+            }
+            file.close();
+        }
+    }
 
     // Simplified case-insensitive comparison function
     static bool caseInsensitiveEqual(const string& str1, const string& str2) {
@@ -80,67 +135,143 @@ private:
         return true;
     }
 
+    // Helper function to format the service name by capitalizing the first letter
+    static string formatServiceName(const string& serviceName) {
+        if (serviceName.empty()) return serviceName;
+        string formattedName = serviceName;
+        formattedName[0] = toupper(formattedName[0]);
+        return formattedName;
+    }
+
+    // Function to check if a string is a valid integer
+    bool isInteger(const string& input) {
+        // If the input contains any non-digit characters, it's invalid
+        if (input.empty()) return false;
+        for (char c : input) {
+            if (!isdigit(c)) return false;
+        }
+        return true;
+    }
+
+    // Function to get the booking counts for each customer from bookings.txt
+    map<string, int> getBookingCounts(const string& bookingsFilename) {
+        ifstream bookingFile(bookingsFilename); // Open the bookings file
+        map<string, int> customerBookingCount;  // Map to store booking count per customer
+
+        if (!bookingFile.is_open()) {
+            cout << "Error: Could not open bookings file." << endl;
+            return customerBookingCount;
+        }
+
+        string line, customerName;
+        while (getline(bookingFile, line)) {
+            stringstream ss(line);
+            getline(ss, customerName, ','); // Extract customer name from the first column
+            customerBookingCount[customerName]++; // Increment booking count for this customer
+        }
+
+        bookingFile.close(); // Close the file
+        return customerBookingCount;
+    }
+
 public:
-    BeautyServiceApp() : serviceCount(0), expertCount(0), customerCount(0) {
+    BeautyServiceApp() : serviceCount(0), expertCount(0) {
         // Initialize services and experts
         services[serviceCount++] = Service("Facial", 50.0, 2);
         services[serviceCount++] = Service("Makeup", 70.0, 2);
         services[serviceCount++] = Service("Manicure", 30.0, 2);
         services[serviceCount++] = Service("Consultation", 20.0, 1);
 
-        experts[expertCount++] = Expert("Martha");
-        experts[expertCount++] = Expert("Helena");
-        experts[expertCount++] = Expert("Elizabeth");
+        experts[expertCount++] = Expert("Alice");
+        experts[expertCount++] = Expert("Bob");
+        experts[expertCount++] = Expert("Cathy");
 
         // Adding a default admin (for initial testing)
-        adminCredentials["admin"] = "adminpass";
+        adminCredentials["admin"] = "";
+        loadAdminCredentials();
     }
 
     void showLogo() {
-        cout << "\033[1;36m";
- cout << "        ***********************  \n";
- cout << "      ***               *** ***  \n";
- cout << "    ***                ***  ***  \n";
- cout << "  ***                 ***   ***  \n";
- cout << "************************    ***  \n";
- cout << "***   *****   *****  ***    ***  \n";
- cout << "***  ++       **  ** ***    ***  \n";
- cout << "*** **   **** *****  ***   ***   \n";
- cout << "***  **   **  **  ** ***  ***    \n";
- cout << "***   ******  *****  *** ***     \n";
- cout << "***************************      \n";
- cout << "\033[0m";
+        cout << "\033[1;36m"; // Set text color to cyan
+        cout << "   ____ _                                    _   _                       " << endl;
+        cout << "  / ___| | __ _ _ __ ___   ___  _   _ _ __  | | | | __ ___   _____ _ __  " << endl;
+        cout << " | |  _| |/ _` | '_ ` _ \\ / _ \\| | | | '__| | |_| |/ _` \\ \\ / / _ \\ '_ \\ " << endl;
+        cout << " | |_| | | (_| | | | | | | (_) | |_| | |    |  _  | (_| |\\ V /  __/ | | |" << endl;
+        cout << "  \\____|_|\\__,_|_| |_| |_|\\___/ \\__,_|_|    |_| |_|\\__,_| \\_/ \\___|_| |_|" << endl;
+        cout << "\033[0m"; // Reset text color
     }
 
+    void Loginlogo() {
+        cout << "\033[1;36m"; // Set text color to cyan
+        cout << "  _      ____   _____ _____ _   _ " << endl;
+        cout << " | |    / __ \\ / ____|_   _| \\ | |" << endl;
+        cout << " | |   | |  | | |  __  | | |  \\| |" << endl;
+        cout << " | |   | |  | | | |_ | | | | . ` |" << endl;
+        cout << " | |___| |__| | |__| |_| |_| |\\  |" << endl;
+        cout << " |______\\____/ \\_____|_____|_| \\_|" << endl;
+        cout << "\033[0m"; // Reset text color
+    }
+
+    void Registerlogo() {
+        cout << "\033[1;36m"; // Set text color to cyan
+        cout << "  _____  ______ _____ _____  _____ _______ ______ _____  " << endl;
+        cout << " |  __ \\|  ____/ ____|_   _|/ ____|__   __|  ____|  __ \\ " << endl;
+        cout << " | |__) | |__ | |  __  | | | (___    | |  | |__  | |__) |" << endl;
+        cout << " |  _  /|  __|| | |_ | | |  \\___ \\   | |  |  __| |  _  / " << endl;
+        cout << " | | \\ \\| |___| |__| |_| |_ ____) |  | |  | |____| | \\ \\ " << endl;
+        cout << " |_|  \\_\\______\\_____|_____|_____/   |_|  |______|_|  \\_\\ " << endl;
+        cout << "\033[0m"; // Reset text color
+    }
+
+
     void showMainMenu() {
+        showLogo();
         int choice;
         do {
-            cout << "1. Customer Menu" << endl;
-                      cout << "2. Admin Menu" << endl;
-            cout << "3. Exit" << endl;
+            cout << "+------------------+" << endl;
+            cout << "|     Main Menu    |" << endl;
+            cout << "+------------------+" << endl;
+            cout << "| 1. Customer Menu |" << endl;
+            cout << "| 2. Admin Menu    |" << endl;
+            cout << "| 3. Exit          |" << endl;
+            cout << "+------------------+" << endl;
             cout << "Enter your choice: ";
-            cin >> choice;
+            while (!(cin >> choice) || choice < 1 || choice > 3) {
+                cin.clear();
+                cin.ignore(numeric_limits<streamsize>::max(), '\n');
+                cout << "\nInvalid choice. Please enter a number between 1 and 3: ";
+            }
 
             switch (choice) {
             case 1: customerMenu(); break;
             case 2: adminMenu(); break;
             case 3: cout << "Exiting..." << endl; break;
-            default: cout << "Invalid choice. Please try again." << endl;
             }
         } while (choice != 3);
     }
 
     void customerMenu() {
+        showLogo();
         int choice;
         do {
-            cout << "1. View Organization Details" << endl;
-            cout << "2. View Services and Experts" << endl;
-            cout << "3. Check Schedule" << endl;
-            cout << "4. Book Service" << endl;
-            cout << "5. View Booked Schedule" << endl;
-            cout << "6. Back to Main Menu" << endl;
+            cout << "+----------------------------------+" << endl;
+            cout << "|          Customer Menu           |" << endl;
+            cout << "+----------------------------------+" << endl;
+            cout << "| 1. View Organization Details     |" << endl;
+            cout << "| 2. View Services and Experts     |" << endl;
+            cout << "| 3. Check Schedule                |" << endl;
+            cout << "| 4. Book Service                  |" << endl;
+            cout << "| 5. View Booked Schedule          |" << endl;
+            cout << "| 6. Customer Review               |" << endl;
+            cout << "| 7. Back to Main Menu             |" << endl;
+            cout << "+----------------------------------+" << endl;
             cout << "Enter your choice: ";
-            cin >> choice;
+
+            while (!(cin >> choice) || choice < 1 || choice > 7) {
+                cin.clear();
+                cin.ignore(numeric_limits<streamsize>::max(), '\n');
+                cout << "\nInvalid choice. Please enter a number between 1 and 7: ";
+            }
 
             switch (choice) {
             case 1: viewOrganizationDetails(); break;
@@ -148,131 +279,203 @@ public:
             case 3: checkSchedule(); break;
             case 4: bookService(); break;
             case 5: viewBookedSchedule(); break;
-            case 6: break;
-            default: cout << "Invalid choice. Please try again." << endl;
+            case 6: customerReview(); break;  // Call the customer review function
+            case 7: break; // Go back to main menu
             }
-        } while (choice != 6);
+        } while (choice != 7);
     }
 
     void adminMenu() {
+    while (true) {
         if (!isAdminLoggedIn) {
-            cout << "1. Register Admin" << endl;
-            cout << "2. Login Admin" << endl;
-            cout << "3. Back to Main Menu" << endl;
-            cout << "Enter your choice: ";
             int choice;
-            cin >> choice;
+            cout << "+----------------------------------+" << endl;
+            cout << "|            Admin Menu            |" << endl;
+            cout << "+----------------------------------+" << endl;
+            cout << "| 1. Register Admin                |" << endl;
+            cout << "| 2. Login Admin                   |" << endl;
+            cout << "| 3. Back to Main Menu             |" << endl;
+            cout << "+----------------------------------+" << endl;
+            cout << "Enter your choice: ";
+
+            while (!(cin >> choice) || choice < 1 || choice > 3) {
+                cin.clear();
+                cin.ignore(numeric_limits<streamsize>::max(), '\n');
+                cout << "\nInvalid choice. Please enter a number between 1 and 3: ";
+            }
 
             switch (choice) {
             case 1: registerAdmin(); break;
-            case 2: loginAdmin(); break;
-            case 3: break;
-            default: cout << "Invalid choice. Please try again." << endl;
+            case 2:
+                loginAdmin();
+                if (isAdminLoggedIn) {
+                    showAdminManagementOptions();
+                    return; // Exit the adminMenu function after successful login
+                }
+                break;
+            case 3: return; // Go back to main menu
             }
-        }
-        else {
-            int choice;
-            do {
-                cout << "1. View Individual Schedule" << endl;
-                cout << "2. View Overall Schedule" << endl;
-                cout << "3. View Customers" << endl;
-                cout << "4. Generate Sales Report" << endl;
-                cout << "5. Logout" << endl;
-                cout << "6. Back to Main Menu" << endl;
-                cout << "Enter your choice: ";
-                cin >> choice;
-
-                switch (choice) {
-                case 1: {
-                    string expertName;
-                    cout << "Enter the expert's name: ";
-                    cin >> expertName;
-                    viewIndividualSchedule(expertName);
-                    break;
-                }
-                case 2: viewOverallSchedule(); break;
-                case 3: viewCustomers(); break;
-                case 4: generateSalesReport(); break;
-                case 5:
-                    isAdminLoggedIn = false;
-                    cout << "Logged out successfully." << endl;
-                    return; // Return to main menu after logout
-                case 6: return; // Return to main menu if selected
-                default: cout << "Invalid choice. Try again." << endl;
-                }
-            } while (choice != 6);
+        } else {
+            showAdminManagementOptions();
+            return; // Exit the adminMenu function after showing management options
         }
     }
+}
+
+    void showAdminManagementOptions() {
+    int choice;
+    do {
+        cout << "+----------------------------------+" << endl;
+        cout << "|       Admin Management Menu      |" << endl;
+        cout << "+----------------------------------+" << endl;
+        cout << "| 1. View Individual Schedule      |" << endl;
+        cout << "| 2. View Overall Schedule         |" << endl;
+        cout << "| 3. View Customers                |" << endl;
+        cout << "| 4. View Customers Feedback       |" << endl; 
+        cout << "| 5. Generate Sales Report         |" << endl;
+        cout << "| 6. Logout                        |" << endl; 
+        cout << "+----------------------------------+" << endl;
+        cout << "Enter your choice: ";
+
+        while (!(cin >> choice) || choice < 1 || choice > 6) { 
+            cin.clear();
+            cin.ignore(numeric_limits<streamsize>::max(), '\n');
+            cout << "\nInvalid choice. Please enter a number between 1 and 6: ";
+        }
+
+        switch (choice) {
+        case 1: {
+            string expertName;
+            cout << "Enter the expert's name: ";
+            cin >> expertName;
+            viewIndividualSchedule(expertName);
+            break;
+        }
+        case 2: viewOverallSchedule(); break;
+        case 3: viewCustomers(); break;
+        case 4: displayReviews(); break;  
+        case 5: generateSalesReport(); break;
+        case 6: isAdminLoggedIn = false; cout << "Logged out successfully." << endl; break;
+        }
+    } while (choice != 6); 
+}
 
     void registerAdmin() {
         string username, password;
-        cout << "Enter a new username: ";
+        Registerlogo();
+        cout << "\nEnter a new username: ";
         cin >> username;
         cout << "Enter a new password: ";
         cin >> password;
 
         if (adminCredentials.find(username) != adminCredentials.end()) {
             cout << "Username already exists. Please try again." << endl;
-        } else {
-            adminCredentials[username] = password;
-            cout << "Registration successful. You can now log in." << endl;
         }
+        else {
+            adminCredentials[username] = password;
+            saveAdminCredentials(); // Save new credentials to file
+            cout << "Registration successful. You can now log in." << endl;
     }
+}
 
     void loginAdmin() {
         string username, password;
-        cout << "Enter username: ";
+        Loginlogo();
+        cout << "\nEnter username: ";
         cin >> username;
-        cout << "Enter password: ";
-        cin >> password;
+        password = getPassword(); // This function handles password input
 
         if (adminCredentials.find(username) != adminCredentials.end() &&
             adminCredentials[username] == password) {
             isAdminLoggedIn = true;
             cout << "Login successful. Welcome, " << username << "!" << endl;
-        } else {
+        }
+        else {
             cout << "Invalid username or password. Please try again." << endl;
         }
     }
 
+    string getPassword() {
+        string password;
+        char ch;
+        cout << "Enter password: ";
+        while ((ch = _getch()) != '\r') {  // '\r' is the Enter key
+            if (ch == '\b') {  // Backspace
+                if (!password.empty()) {
+                    cout << "\b \b";  // Erase the last asterisk
+                    password.pop_back();
+                }
+            }
+            else {
+                password.push_back(ch);
+                cout << '*';
+            }
+        }
+        cout << endl;
+        return password;
+    }
+
     void viewOrganizationDetails() {
-        cout << endl;
-        cout << "Welcome to Great Beauty!" << endl;
-        cout << endl;
-        cout << "About Us:" << endl;
-        cout << "Great Beauty, founded in 2010, focuses on delivering cutting-edge skincare and beauty solutions." << endl;
-        cout << "Our mission is to prioritize quality, safety, and efficacy in all our services." << endl;
-        cout << endl;
-        cout << "Our services:" << endl;
-        cout << "Facials           : Rejuvenate your skin with our custom facials." << endl;
-        cout << "Makeup Application: Perfect your look for any occasion with our expert makeup artists." << endl;
-        cout << "Manicure          : Improves the overall look of your nails and hands." << endl;
-        cout << "Consultation      : Get personalized beauty advice and recommendations." << endl;
-        cout << endl;
-        cout << "Location          : 123 Beauty St, fantasy valheim." << endl;
-        cout << endl;
-        cout << "Online Presence:" << endl;
-        cout << "Google            : www.Greatbeauty.com" << endl;
-        cout << "Instagram         : @Greatbeauty" << endl;
-        cout << "Facebook          : /Greatbeauty" << endl;
-        cout << endl;
-        cout << "Customer Support:" << endl;
-        cout << "Contact           : 555-1234" << endl;
-        cout << "Email             : Greatbeauty@gmail.com" << endl;
-        cout << endl;
+        // Cyan borders and title
+        cout << "\033[1;36m"; // Set text color to cyan
+        cout << "\n+==================================================+\n";
+        cout << "|            Welcome to \033[1;36mGlamour Haven!\033[1;36m             |\n"; // Cyan for Glamour Haven
+        cout << "+==================================================+\n\033[0m"; // Reset color
+
+        // About Us section with cyan title
+        cout << "\033[1;36m+==================== About Us ====================+\033[0m\n"; // Cyan for section headers
+        cout << "\033[1;37m Glamour Haven, founded in \033[1;33m2010\033[1;37m, focuses on\n"; // White for content, yellow for important info
+        cout << " delivering cutting-edge skincare and beauty\n";
+        cout << " solutions. Our mission is to prioritize \033[1;33mquality\033[1;37m,\n";
+        cout << " safety, and efficacy in all our services.\n";
+        cout << "\033[1;36m+==================================================+\033[0m\n\n"; // Cyan borders
+
+        // Our Services section
+        cout << "\033[1;36m+================== Our Services ==================+\033[0m\n"; // Cyan title
+        cout << left << setw(20) << "\033[1;37mFacials\033[0m" << ": Rejuvenate your skin with our custom facials.\n"; // White content
+        cout << left << setw(20) << "\033[1;37mMakeup Application\033[0m" << ": Perfect your look for any occasion with our expert makeup artists.\n";
+        cout << left << setw(20) << "\033[1;37mManicure\033[0m" << ": Improves the overall look of your nails and hands.\n";
+        cout << left << setw(20) << "\033[1;37mConsultation\033[0m" << ": Get personalized beauty advice and recommendations.\n";
+        cout << "\033[1;36m+==================================================+\033[0m\n\n"; // Cyan borders
+
+        // Our Location section
+        cout << "\033[1;36m+================== Our Location ==================+\033[0m\n"; // Cyan title
+        cout << "\033[1;37m Address        : 123 Beauty St.\n";
+        cout << " Open Hours     : 8:00 AM - 7:00 PM\033[0m\n";
+        cout << "\033[1;36m+==================================================+\033[0m\n\n"; // Cyan borders
+
+        // Online Presence section
+        cout << "\033[1;36m+=============== Online Presence ==================+\033[0m\n"; // Cyan title
+        cout << "\033[1;37m Google          : www.Beautyservices.com\n";
+        cout << " Instagram       : @Beautyservices\n";
+        cout << " Facebook        : /Beautyservices\033[0m\n";
+        cout << "\033[1;36m+==================================================+\033[0m\n\n"; // Cyan borders
+
+        // Customer Support section
+        cout << "\033[1;36m+=============== Customer Support =================+\033[0m\n"; // Cyan title
+        cout << "\033[1;37m Contact          : 011-236-2111\n";
+        cout << " Email            : BeautyServices@gmail.com\033[0m\n";
+        cout << "\033[1;36m+==================================================+\033[0m\n\n"; // Cyan borders
     }
 
     void viewServicesAndExperts() {
         cout << endl;
-        cout << setfill('-') << setw(80) << "" << setfill(' ') << endl;
-        cout << left << setw(25) << "Service Name" << setw(10) << "Price" << setw(15) << "Duration (hrs)" << setw(30) << "Available Experts" << endl;
-        cout << setfill('-') << setw(80) << "" << setfill(' ') << endl;
 
-        // Display services and prices
+        // Create a clean header with a simple border
+        cout << "\033[1;36m" << string(80, '=') << "\033[0m" << endl; // Top border
+        cout << "\033[1;33m" << left << setw(25) << "Service Name"
+            << setw(10) << "Price"
+            << setw(15) << "Duration(hrs)"
+            << setw(30) << "Available Experts" << "\033[0m" << endl;
+        cout << "\033[1;36m" << string(80, '=') << "\033[0m" << endl; // Header separator
+
+        // Display services and prices without colors
         for (int i = 0; i < serviceCount; ++i) {
-            cout << left << setw(25) << services[i].name;
-            cout << setw(10) << fixed << setprecision(2) << services[i].price;
-            cout << setw(15) << services[i].duration;
+            cout << left << setw(25) << services[i].name; // Service name
+            cout << setw(10) << fixed << setprecision(2) << services[i].price; // Price
+            cout << setw(15) << services[i].duration; // Duration
+
+            // Display available experts
             bool first = true;
             for (int j = 0; j < expertCount; ++j) {
                 if (first) {
@@ -285,7 +488,9 @@ public:
             }
             cout << endl;
         }
-        cout << setfill('-') << setw(80) << "" << setfill(' ') << endl;
+
+        // Footer
+        cout << "\033[1;36m" << string(80, '=') << "\033[0m" << endl; // Bottom border
         cout << endl;
     }
 
@@ -303,144 +508,316 @@ public:
         }
 
         if (expert) {
-            cout << "Schedule for " << expert->name << ":" << endl;
-            cout << setfill('-') << setw(50) << "" << setfill(' ') << endl;
-            cout << left << setw(15) << "Month" << setw(15) << "Day" << setw(20) << "Hours Booked" << endl;
-            cout << setfill('-') << setw(50) << "" << setfill(' ') << endl;
+            // Cyan border and yellow title
+            cout << "\033[1;36m" << string(70, '=') << "\033[0m" << endl; // Cyan border
+            cout << "\033[1;33mSchedule for " << expert->name << ":\033[0m" << endl; // Yellow title
+            cout << "\033[1;36m" << string(70, '=') << "\033[0m" << endl; // Cyan border
 
-            for (int month = 0; month < 12; ++month) {
-                for (int day = 0; day < 30; ++day) {
-                    if (expert->hoursPerDay[month][day] > 0) {
-                        cout << left << setw(15) << month + 1 << setw(15) << day + 1 << setw(20) << expert->hoursPerDay[month][day] << endl;
+            // Table header with yellow text
+            cout << "\033[1;33m" << left << setw(15) << "Month"
+                << setw(10) << "Day"
+                << setw(15) << "Time Slot"
+                << setw(30) << "Booked Service" << "\033[0m" << endl;
+            cout << "\033[1;36m" << string(70, '=') << "\033[0m" << endl; // Cyan border
+
+            // Read all bookings from the file
+            ifstream bookingFile("bookings.txt");
+            if (!bookingFile.is_open()) {
+                cout << "Error opening bookings file for reading." << endl;
+                return;
+            }
+
+            string line;
+            while (getline(bookingFile, line)) {
+                stringstream ss(line);
+                string customerName, serviceName, eName;
+                int month, day, startHour;
+
+                // Parse the line from the file
+                getline(ss, customerName, ',');
+                getline(ss, serviceName, ',');
+                getline(ss, eName, ',');
+                ss >> month;
+                ss.ignore(); // Ignore comma
+                ss >> day;
+                ss.ignore(); // Ignore comma
+                ss >> startHour;
+
+                // Ensure the booking is for the correct expert
+                if (caseInsensitiveEqual(eName, expert->name)) {
+                    // Find the duration of the service
+                    int serviceDuration = 0;
+                    for (int i = 0; i < serviceCount; ++i) {
+                        if (caseInsensitiveEqual(services[i].name, serviceName)) {
+                            serviceDuration = services[i].duration;
+                            break;
+                        }
                     }
+
+                    // Display the booking with proper formatting
+                    int endHour = startHour + serviceDuration;
+                    cout << left << setw(15) << month;
+                    cout << setw(10) << day;
+                    cout << left << setw(15) << (to_string(startHour) + "-" + to_string(endHour));
+                    cout << setw(30) << formatServiceName(serviceName) << endl;
                 }
             }
-            cout << setfill('-') << setw(50) << "" << setfill(' ') << endl;
+
+            bookingFile.close();
+            cout << "\033[1;36m" << string(70, '=') << "\033[0m" << endl; // Cyan border at the bottom
         }
         else {
-            cout << "Expert not found!" << endl;
+            cout << "\033[1;31mExpert not found!\033[0m" << endl; // Red error message
         }
-        cout << endl;
     }
 
     void bookService() {
-        string customerName;
-        string serviceName;
-        string expertName;
-        int month, day;
+        string customerName, serviceName, expertName;
+        int month, day, startHour;
+
+        // Display available services and experts
+        viewServicesAndExperts();
+
+        // Get customer details
+        cout << "\n\033[1;36m" << string(40, '=') << "\033[0m\n"; // Cyan border with "="
+        cout << "\033[1;33m  Enter Customer Details\033[0m\n";    // Yellow title
+        cout << "\033[1;36m" << string(40, '=') << "\033[0m\n\n";  // Cyan border
 
         cout << "Enter your name: ";
-        cin >> customerName;
+        cin.ignore();
+        getline(cin, customerName);
+
         cout << "Enter the service name: ";
-        cin >> serviceName;
+        getline(cin, serviceName);
+
+        // Find the selected service
+        Service* selectedService = nullptr;
+        for (int i = 0; i < serviceCount; ++i) {
+            if (caseInsensitiveEqual(services[i].name, serviceName)) {
+                selectedService = &services[i];
+                break;
+            }
+        }
+
+        if (!selectedService) {
+            cout << "\033[1;31mService not found. Please try again.\033[0m" << endl; // Red error message
+            return;
+        }
+
+        // Get expert details
         cout << "Enter the expert's name: ";
-        cin >> expertName;
+        getline(cin, expertName);
+
+        Expert* selectedExpert = nullptr;
+        for (int i = 0; i < expertCount; ++i) {
+            if (caseInsensitiveEqual(experts[i].name, expertName)) {
+                selectedExpert = &experts[i];
+                break;
+            }
+        }
+
+        if (!selectedExpert) {
+            cout << "\033[1;31mExpert not found. Please try again.\033[0m" << endl; // Red error message
+            return;
+        }
+
+        // Get booking details
+        cout << "\n\033[1;36m" << string(40, '=') << "\033[0m\n"; // Cyan border with "="
+        cout << "\033[1;33m  Enter Booking Details\033[0m\n";    // Yellow title
+        cout << "\033[1;36m" << string(40, '=') << "\033[0m\n\n";  // Cyan border
+
         cout << "Enter the month (1-12): ";
         cin >> month;
         cout << "Enter the day (1-30): ";
         cin >> day;
+        cout << "Enter the start hour (8-18): ";
+        cin >> startHour;
 
-        bool serviceFound = false;
-        bool expertFound = false;
-
-        Service* selectedService = nullptr;
-        Expert* selectedExpert = nullptr;
-
-        // Find the service
-        for (int i = 0; i < serviceCount; ++i) {
-            if (caseInsensitiveEqual(services[i].name, serviceName)) {
-                selectedService = &services[i];
-                serviceFound = true;
-                break;
-            }
-        }
-
-        // Find the expert
-        for (int i = 0; i < expertCount; ++i) {
-            if (caseInsensitiveEqual(experts[i].name, expertName)) {
-                selectedExpert = &experts[i];
-                expertFound = true;
-                break;
-            }
-        }
-
-        if (!serviceFound || !expertFound) {
-            cout << "Service or Expert not found. Please check the names and try again." << endl;
+        // Check if the booking fits within the shop hours
+        if (startHour < 8 || startHour + selectedService->duration > 19) {
+            cout << "\033[1;31mInvalid booking time. Please select a time within 8 AM - 7 PM.\033[0m" << endl; // Red error
             return;
         }
 
-        // Check if the expert has enough total hours available
-        if (!selectedExpert->canWork(selectedService->duration)) {
-            cout << "Expert does not have enough total hours available." << endl;
+        // Check availability
+        int week = getWeekOfYear(month, day);
+        if (!selectedExpert->isAvailable(month, day, startHour, selectedService->duration, week)) {
+            cout << "\033[1;31mThe expert is not available at the selected time. Please choose a different time.\033[0m" << endl; // Red error
             return;
         }
 
-        // Check if adding the service's duration on the selected day is possible
-        if (!selectedExpert->canAddHours(month, day, selectedService->duration)) {
-            cout << "The selected day has reached its maximum allowed hours." << endl;
-            return;
+        // Book the time slot
+        selectedExpert->bookTime(month, day, startHour, selectedService->duration, week);
+
+        // Save the booking to a file
+        ofstream bookingFile("bookings.txt", ios::app);
+        if (bookingFile.is_open()) {
+            bookingFile << customerName << "," << serviceName << "," << expertName << "," << month << "," << day << "," << startHour << "\n";
+            bookingFile.close();
+
+            // Booking confirmation message
+            cout << "\n\033[1;32m" << string(40, '=') << "\033[0m\n"; // Green success border with "="
+            cout << "\033[1;32m  Service booked successfully!\033[0m\n"; // Green success message
+            cout << "\033[1;32m" << string(40, '=') << "\033[0m\n";  // Green success border
         }
-
-        // Proceed to book the service
-        selectedExpert->addHours(month, day, selectedService->duration);
-
-        // Find or create the customer
-        Customer* customer = nullptr;
-        for (int i = 0; i < customerCount; ++i) {
-            if (caseInsensitiveEqual(customers[i].name, customerName)) {
-                customer = &customers[i];
-                break;
-            }
+        else {
+            cout << "\033[1;31mError saving booking. Please try again later.\033[0m" << endl; // Red error
         }
+    }
 
-        if (!customer) {
-            customer = &customers[customerCount++];
-            customer->name = customerName;
-        }
-
-        customer->bookedServices[customer->bookingCount].serviceName = serviceName;
-        customer->bookedServices[customer->bookingCount].month = month;
-        customer->bookedServices[customer->bookingCount].expertName = expertName;
-        customer->bookingCount++;
-
-        cout << "Service booked successfully!" << endl;
+    // Helper function to calculate the week of the year (approximation)
+    int getWeekOfYear(int month, int day) {
+        return ((month - 1) * 30 + day) / 7;
     }
 
     void viewBookedSchedule() {
         string customerName;
         cout << "Enter your name: ";
-        cin >> customerName;
+        cin.ignore(); // Clear the input buffer to prevent issues from previous cin operations
+        getline(cin, customerName); // Use getline to capture the full name with spaces
 
-        Customer* customer = nullptr;
-        for (int i = 0; i < customerCount; ++i) {
-            if (caseInsensitiveEqual(customers[i].name, customerName)) {
-                customer = &customers[i];
-                break;
+        // Open the bookings file
+        ifstream bookingFile("bookings.txt");
+        if (!bookingFile.is_open()) {
+            cout << "Error opening bookings file for reading." << endl;
+            return;
+        }
+
+        bool found = false;
+
+        // Display header with yellow title and cyan borders
+        cout << "\033[1;36m" << string(80, '=') << "\033[0m" << endl; // Cyan border
+        cout << "\033[1;33mBooked Services for " << customerName << ":\033[0m" << endl; // Yellow title
+        cout << "\033[1;36m" << string(80, '=') << "\033[0m" << endl; // Cyan border
+
+        // Table header with yellow text
+        cout << "\033[1;33m" << left << setw(20) << "Service Name"
+            << setw(10) << "Day"
+            << setw(10) << "Month"
+            << setw(15) << "Time Slot"
+            << setw(20) << "Expert Name" << "\033[0m" << endl;
+        cout << "\033[1;36m" << string(80, '=') << "\033[0m" << endl; // Cyan border
+
+        string line;
+        while (getline(bookingFile, line)) {
+            stringstream ss(line);
+            string name, serviceName, expertName;
+            int month, day, startHour;
+
+            // Reading customer name, service name, and expert name
+            getline(ss, name, ','); // This will read the full name from the file
+            getline(ss, serviceName, ',');
+            getline(ss, expertName, ',');
+            ss >> month;
+            ss.ignore(); // Ignore comma
+            ss >> day;
+            ss.ignore(); // Ignore comma
+            ss >> startHour;
+
+            // Apply caseInsensitiveEqual for full name comparison
+            if (caseInsensitiveEqual(name, customerName)) {
+                found = true;
+
+                // Find the duration of the service by matching the service name
+                int serviceDuration = 0;
+                for (int i = 0; i < serviceCount; ++i) {
+                    if (caseInsensitiveEqual(services[i].name, serviceName)) {
+                        serviceDuration = services[i].duration;
+                        break;
+                    }
+                }
+
+                // Calculate the end hour
+                int endHour = startHour + serviceDuration;
+
+                // Display the service booking with correct formatting
+                cout << left << setw(20) << formatServiceName(serviceName);
+                cout << setw(10) << day;
+                cout << setw(10) << month;
+                cout << left << setw(15) << (to_string(startHour) + "-" + to_string(endHour));
+                cout << setw(20) << expertName << endl;
             }
         }
 
-        if (customer) {
-            cout << "Booked Services for " << customer->name << ":" << endl;
-            cout << setfill('-') << setw(50) << "" << setfill(' ') << endl;
-            cout << left << setw(20) << "Service Name" << setw(15) << "Month" << setw(15) << "Expert Name" << endl;
-            cout << setfill('-') << setw(50) << "" << setfill(' ') << endl;
-
-            for (int i = 0; i < customer->bookingCount; ++i) {
-                cout << left << setw(20) << customer->bookedServices[i].serviceName;
-                cout << setw(15) << customer->bookedServices[i].month;
-                cout << setw(15) << customer->bookedServices[i].expertName << endl;
-            }
-
-            cout << setfill('-') << setw(50) << "" << setfill(' ') << endl;
-        }
-        else {
+        if (!found) {
             cout << "No bookings found for " << customerName << "." << endl;
         }
-        cout << endl;
+
+        // Bottom cyan border
+        cout << "\033[1;36m" << string(80, '=') << "\033[0m" << endl;
+        bookingFile.close();
+    }
+
+    void customerReview() {
+        string customerName;
+        string serviceName;
+        string expertName;
+        string ratingInput;  // Read rating as a string
+        int rating;
+        string comment;
+
+        // Formatting the console output with yellow title and cyan borders
+        cout << "\033[1;36m" << string(65, '=') << "\033[0m" << endl; // Cyan border with "="
+        cout << "\033[1;33m|                Customer Feedback Submission                  |\033[0m" << endl;  // Yellow title
+        cout << "\033[1;36m" << string(65, '=') << "\033[0m" << endl; // Cyan border with "="
+
+        cout << "Enter your name: ";
+        cin.ignore();  // Clear the input buffer
+        getline(cin, customerName);
+
+        cout << "Enter the service name you want to review: ";
+        getline(cin, serviceName);
+
+        cout << "Enter the expert's name: ";
+        getline(cin, expertName);
+
+        // Input and validate rating (must be an integer between 1 and 5)
+        while (true) {
+            cout << "Enter your rating (1-5): ";
+            cin >> ratingInput;
+
+            // Check if the input is a valid integer
+            if (isInteger(ratingInput)) {
+                // Convert the valid string input to an integer
+                rating = stoi(ratingInput);
+
+                // Ensure that the rating is between 1 and 5
+                if (rating >= 1 && rating <= 5) {
+                    break;  // Valid rating, exit the loop
+                }
+            }
+
+            // If we reach here, the input was invalid
+            cout << "Invalid rating. Please enter a whole number between 1 and 5." << endl;
+            cin.clear();  // Clear the error flag
+            cin.ignore(numeric_limits<streamsize>::max(), '\n');  // Discard invalid input
+        }
+
+        cout << "Enter your comment: ";
+        cin.ignore();  // Clear the input buffer
+        getline(cin, comment);
+
+        // Save the review to a file
+        ofstream file("reviews.txt", ios::app); // Open the file in append mode
+        if (file.is_open()) {
+            file << customerName << "|" << serviceName << "|" << expertName << "|" << rating << "|" << comment << "\n";
+            file.close();
+
+            cout << "\033[1;36m" << string(65, '=') << "\033[0m" << endl; // Cyan border with "="
+            cout << "\033[1;32m|                    Thank you for your feedback!               |\033[0m" << endl;  // Green success message
+            cout << "\033[1;36m" << string(65, '=') << "\033[0m" << endl; // Cyan border with "="
+        }
+        else {
+            cout << "\033[1;36m" << string(65, '=') << "\033[0m" << endl; // Cyan border with "="
+            cout << "\033[1;31m| Error: Unable to open file for writing.                      |\033[0m" << endl; // Red error message
+            cout << "\033[1;36m" << string(65, '=') << "\033[0m" << endl; // Cyan border with "="
+        }
     }
 
     void viewIndividualSchedule(const string& expertName) {
         Expert* expert = nullptr;
+
+        // Find the expert by name
         for (int i = 0; i < expertCount; ++i) {
             if (caseInsensitiveEqual(experts[i].name, expertName)) {
                 expert = &experts[i];
@@ -449,88 +826,408 @@ public:
         }
 
         if (expert) {
-            cout << "Schedule for " << expert->name << ":" << endl;
-            cout << setfill('-') << setw(80) << "" << setfill(' ') << endl;
-            cout << left << setw(15) << "Month" << setw(15) << "Day" << setw(20) << "Hours Booked" << endl;
-            cout << setfill('-') << setw(80) << "" << setfill(' ') << endl;
+            // Display schedule header with yellow title and cyan borders
+            cout << "\033[1;36m" << string(100, '=') << "\033[0m" << endl; // Cyan border with "="
+            cout << "\033[1;33mSchedule for " << expert->name << ":\033[0m" << endl; // Yellow title
+            cout << "\033[1;36m" << string(100, '=') << "\033[0m" << endl; // Cyan border with "="
 
-            for (int month = 0; month < 12; ++month) {
-                for (int day = 0; day < 30; ++day) {
-                    if (expert->hoursPerDay[month][day] > 0) {
-                        cout << left << setw(15) << month + 1 << setw(15) << day + 1 << setw(20) << expert->hoursPerDay[month][day] << endl;
+            cout << left << setw(20) << "Customer"
+                << setw(20) << "Booked Service"
+                << setw(10) << "Month"
+                << setw(10) << "Day"
+                << setw(20) << "Time Slot" << endl;
+
+            cout << "\033[1;36m" << string(100, '=') << "\033[0m" << endl; // Cyan border
+
+            // Open the bookings file
+            ifstream bookingFile("bookings.txt");
+            if (!bookingFile.is_open()) {
+                cout << "Error opening bookings file for reading." << endl;
+                return;
+            }
+
+            string line;
+            while (getline(bookingFile, line)) {
+                stringstream ss(line);
+                string customerName, serviceName, bookedExpert;
+                int month, day, startHour;
+
+                // Read customer, service, expert, month, day, and startHour from the file
+                getline(ss, customerName, ',');
+                getline(ss, serviceName, ',');
+                getline(ss, bookedExpert, ',');
+                ss >> month;
+                ss.ignore(); // Ignore the comma
+                ss >> day;
+                ss.ignore(); // Ignore the comma
+                ss >> startHour;
+
+                // Check if this booking is for the specified expert
+                if (caseInsensitiveEqual(bookedExpert, expertName)) {
+                    // Calculate the end hour by adding the duration of the service
+                    int serviceDuration = 0;
+                    for (int i = 0; i < serviceCount; ++i) {
+                        if (caseInsensitiveEqual(services[i].name, serviceName)) {
+                            serviceDuration = services[i].duration;
+                            break;
+                        }
                     }
+
+                    // Calculate the end time for the service
+                    int endHour = startHour + serviceDuration;
+
+                    // Display the booking with proper formatting
+                    cout << left << setw(20) << customerName;
+                    cout << setw(20) << formatServiceName(serviceName);
+                    cout << setw(10) << month;
+                    cout << setw(10) << day;
+                    cout << setw(20) << (to_string(startHour) + "-" + to_string(endHour));
+                    cout << endl;
                 }
             }
-            cout << setfill('-') << setw(80) << "" << setfill(' ') << endl;
+
+            bookingFile.close();
+            cout << "\033[1;36m" << string(100, '=') << "\033[0m" << endl; // Cyan border
         }
         else {
             cout << "Expert not found!" << endl;
         }
-        cout << endl;
     }
 
     void viewOverallSchedule() {
-        cout << "Overall Schedule:" << endl;
-        cout << setfill('-') << setw(80) << "" << setfill(' ') << endl;
-        cout << left << setw(15) << "Expert" << setw(15) << "Month" << setw(15) << "Day" << setw(20) << "Hours Booked" << endl;
-        cout << setfill('-') << setw(80) << "" << setfill(' ') << endl;
+        // Display overall schedule header with yellow title and cyan borders
+        cout << "\033[1;36m" << string(120, '=') << "\033[0m" << endl; // Cyan border with "="
+        cout << "\033[1;33mOverall Schedule:\033[0m" << endl; // Yellow title
+        cout << "\033[1;36m" << string(120, '=') << "\033[0m" << endl; // Cyan border with "="
 
-        for (int i = 0; i < expertCount; ++i) {
-            for (int month = 0; month < 12; ++month) {
-                for (int day = 0; day < 30; ++day) {
-                    if (experts[i].hoursPerDay[month][day] > 0) {
-                        cout << left << setw(15) << experts[i].name << setw(15) << month + 1 << setw(15) << day + 1 << setw(20) << experts[i].hoursPerDay[month][day] << endl;
-                    }
+        cout << left << setw(15) << "Expert"
+            << setw(15) << "Month"
+            << setw(10) << "Day"
+            << setw(20) << "Time Slot"
+            << setw(20) << "Booked Service"
+            << setw(20) << "Customer" << endl;
+
+        cout << "\033[1;36m" << string(120, '=') << "\033[0m" << endl; // Cyan border
+
+        // Open the bookings file to gather details
+        ifstream bookingFile("bookings.txt");
+        if (!bookingFile.is_open()) {
+            cout << "Error opening bookings file for reading." << endl;
+            return;
+        }
+
+        string line;
+        while (getline(bookingFile, line)) {
+            stringstream ss(line);
+            string customerName, serviceName, expertName;
+            int month = 0, day = 0, startHour = 0;
+
+            // Read the booking details from the file
+            getline(ss, customerName, ',');
+            getline(ss, serviceName, ',');
+            getline(ss, expertName, ',');
+            ss >> month;
+            ss.ignore(); // Ignore comma
+            ss >> day;
+            ss.ignore(); // Ignore comma
+            ss >> startHour;
+
+            // Ensure valid data has been read before continuing
+            if (ss.fail() || month < 1 || month > 12 || day < 1 || day > 31 || startHour < 8 || startHour >= 19) {
+                cout << "Error: Invalid data in booking file. Skipping entry." << endl;
+                continue;
+            }
+
+            // Find the service duration from the services array
+            int serviceDuration = 0;
+            for (int i = 0; i < serviceCount; ++i) {
+                if (caseInsensitiveEqual(services[i].name, serviceName)) {
+                    serviceDuration = services[i].duration;
+                    break;
                 }
             }
+
+            // Calculate the end hour
+            int endHour = startHour + serviceDuration;
+
+            // Print the details for each booking
+            cout << left << setw(15) << expertName;
+            cout << setw(15) << month;
+            cout << setw(10) << day;
+            cout << left << setw(20) << (to_string(startHour) + "-" + to_string(endHour));
+            cout << setw(20) << formatServiceName(serviceName);
+            cout << setw(20) << customerName << endl;
         }
-        cout << setfill('-') << setw(80) << "" << setfill(' ') << endl;
-        cout << endl;
+
+        bookingFile.close();
+        cout << "\033[1;36m" << string(120, '=') << "\033[0m" << endl; // Cyan border
     }
 
     void viewCustomers() {
-        cout << "List of Customers:" << endl;
-        cout << setfill('-') << setw(30) << "" << setfill(' ') << endl;
-        cout << left << setw(25) << "Customer Name" << endl;
-        cout << setfill('-') << setw(30) << "" << setfill(' ') << endl;
-
-        for (int i = 0; i < customerCount; ++i) {
-            cout << left << setw(25) << customers[i].name << endl;
+        ifstream bookingFile("bookings.txt"); // Open the bookings.txt file
+        if (!bookingFile.is_open()) {
+            cout << "Error: Could not open bookings.txt file." << endl;
+            return;
         }
-        cout << setfill('-') << setw(30) << "" << setfill(' ') << endl;
-        cout << endl;
+
+        map<string, int> customerBookingCount; // Map to store customer names and booking counts
+        string line;
+
+        // Read each line from the bookings file
+        while (getline(bookingFile, line)) {
+            stringstream ss(line);
+            string customerName, serviceName, expertName;
+            int month, day, startHour;
+
+            // Parse the booking information
+            getline(ss, customerName, ','); // Extract customer name (first element)
+            getline(ss, serviceName, ',');  // Ignore service name
+            getline(ss, expertName, ',');   // Ignore expert name
+            ss >> month >> day >> startHour; // Ignore the rest of the line
+
+            // Increment the booking count for the customer
+            customerBookingCount[customerName]++;
+        }
+
+        bookingFile.close(); // Close the file after reading
+
+        // Adjust the border length to fit the title
+        int borderLength = 68; // Adjusted to fit the title length properly
+
+        // Display the sorted list of customers and their booking counts with cyan borders and yellow title
+        cout << "\033[1;36m" << string(borderLength, '=') << "\033[0m" << endl; // Cyan border
+        cout << "\033[1;33m| List of Customers (Sorted Alphabetically with Booking Count) |\033[0m" << endl; // Yellow title
+        cout << "\033[1;36m" << string(borderLength, '=') << "\033[0m" << endl; // Cyan border
+
+        cout << left << setw(25) << "Customer Name" << setw(10) << "Bookings" << endl;
+        cout << "\033[1;36m" << string(borderLength, '=') << "\033[0m" << endl; // Cyan border
+
+        // Sort the customers alphabetically and display them
+        for (const auto& entry : customerBookingCount) {
+            cout << left << setw(25) << entry.first << setw(10) << entry.second << endl;
+        }
+
+        cout << "\033[1;36m" << string(borderLength, '=') << "\033[0m" << endl; // Cyan border
     }
 
-    void generateSalesReport() {
-        cout << "Sales Report:" << endl;
-        cout << setfill('-') << setw(50) << "" << setfill(' ') << endl;
-        cout << left << setw(20) << "Service Name" << setw(15) << "Total Sales" << endl;
-        cout << setfill('-') << setw(50) << "" << setfill(' ') << endl;
+    void displayReviews() const {
+        ifstream file("reviews.txt");
+        if (!file.is_open()) {
+            cout << "No reviews available or unable to open the file.\n";
+            return;
+        }
 
-        double sales[10] = { 0 }; // Assuming 10 services
-        for (int i = 0; i < customerCount; ++i) {
-            for (int j = 0; j < customers[i].bookingCount; ++j) {
-                for (int k = 0; k < serviceCount; ++k) {
-                    if (caseInsensitiveEqual(services[k].name, customers[i].bookedServices[j].serviceName)) {
-                        sales[k] += services[k].price;
-                    }
+        string line;
+
+        // Display reviews header with cyan borders and yellow title
+        cout << "\033[1;36m" << string(75, '=') << "\033[0m" << endl; // Cyan border
+        cout << "\033[1;33m|                             Customer Reviews                             |\033[0m" << endl; // Yellow title
+        cout << "\033[1;36m" << string(75, '=') << "\033[0m" << endl; // Cyan border
+
+        cout << left << setw(18) << "Customer Name"
+            << setw(18) << "Service Name"
+            << setw(18) << "Expert Name"
+            << setw(8) << "Rating"
+            << "Comment" << endl;
+
+        cout << "\033[1;36m" << string(75, '=') << "\033[0m" << endl; // Cyan border
+
+        while (getline(file, line)) {
+            stringstream ss(line);
+            string customerName, serviceName, expertName, ratingStr, comment;
+
+            getline(ss, customerName, '|');
+            getline(ss, serviceName, '|');
+            getline(ss, expertName, '|');
+            getline(ss, ratingStr, '|');
+            getline(ss, comment, '|');
+
+            // Print the first line of the review
+            cout << left << setw(18) << customerName
+                << setw(18) << serviceName
+                << setw(18) << expertName
+                << setw(8) << (ratingStr + "/5");
+
+            // Set max width for comment display
+            int maxWidth = 50;
+            if (comment.length() > maxWidth) {
+                // Print the first portion of the comment
+                cout << comment.substr(0, maxWidth) << endl;
+
+                // Print the rest of the comment in aligned format
+                size_t pos = maxWidth;
+                while (pos < comment.length()) {
+                    cout << setw(62) << " " // Align with the comment column
+                        << comment.substr(pos, maxWidth) << endl;
+                    pos += maxWidth;
                 }
+            }
+            else {
+                cout << comment << endl; // If the comment is short enough
             }
         }
 
-        for (int i = 0; i < serviceCount; ++i) {
-            cout << left << setw(20) << services[i].name;
-            cout << setw(15) << fixed << setprecision(2) << sales[i] << endl;
-        }
+        cout << "\033[1;36m" << string(75, '=') << "\033[0m" << endl; // Cyan border
+        file.close();
+    }
 
-        cout << setfill('-') << setw(50) << "" << setfill(' ') << endl;
-        cout << endl;
+    void generateSalesReport() {
+        int choice;
+        cout << "\033[1;36m" << string(50, '=') << "\033[0m" << endl;
+        cout << "\033[1;33m|            Sales Report Menu               |\033[0m" << endl;
+        cout << "\033[1;36m" << string(50, '=') << "\033[0m" << endl;
+        cout << "| 1. Monthly Sales Report                    |" << endl;
+        cout << "| 2. Overall Sales Report                    |" << endl;
+        cout << "\033[1;36m" << string(50, '=') << "\033[0m" << endl;
+        cout << "Enter your choice: ";
+        cin >> choice;
+
+        switch (choice) {
+        case 1: {
+            int month;
+            cout << "\nEnter the month (1-12): ";
+            cin >> month;
+
+            if (month < 1 || month > 12) {
+                cout << "\033[1;31mInvalid month. Please enter a number between 1 and 12.\033[0m" << endl;
+                return;
+            }
+
+            cout << "\033[1;36m" << string(50, '=') << "\033[0m" << endl;
+            cout << "\033[1;33m|         Monthly Sales Report               |\033[0m" << endl;
+            cout << "\033[1;36m" << string(50, '=') << "\033[0m" << endl;
+            cout << "| Month: " << month << endl;
+            cout << "\033[1;36m" << string(50, '=') << "\033[0m" << endl;
+
+            cout << left << setw(20) << "Service Name" << setw(15) << "Total Sales" << setw(15) << "Bookings" << endl;
+            cout << "\033[1;36m" << string(50, '-') << "\033[0m" << endl;
+
+            double* monthlySales = new double[serviceCount] { 0 };
+            int* serviceBookings = new int[serviceCount] { 0 };
+            double totalMonthlySales = 0.0;
+            bool hasBookings = false;
+
+            ifstream bookingFile("bookings.txt");
+            if (!bookingFile.is_open()) {
+                cout << "\033[1;31mError opening bookings file.\033[0m" << endl;
+                return;
+            }
+
+            string line;
+            while (getline(bookingFile, line)) {
+                stringstream ss(line);
+                string customerName, serviceName, expertName;
+                int bookingMonth = 0, bookingDay = 0, startHour = 0;
+
+                getline(ss, customerName, ',');
+                getline(ss, serviceName, ',');
+                getline(ss, expertName, ',');
+                ss >> bookingMonth;
+                ss.ignore();
+                ss >> bookingDay;
+                ss.ignore();
+                ss >> startHour;
+
+                if (ss.fail() || bookingMonth != month) continue;
+
+                for (int i = 0; i < serviceCount; ++i) {
+                    if (caseInsensitiveEqual(services[i].name, serviceName)) {
+                        monthlySales[i] += services[i].price;
+                        serviceBookings[i]++;
+                        totalMonthlySales += services[i].price;
+                        hasBookings = true;
+                        break;
+                    }
+                }
+            }
+
+            bookingFile.close();
+
+            if (!hasBookings) {
+                cout << "No bookings found for the month " << month << "." << endl;
+            }
+            else {
+                for (int i = 0; i < serviceCount; ++i) {
+                    cout << left << setw(20) << services[i].name
+                        << setw(15) << fixed << setprecision(2) << monthlySales[i]
+                        << setw(15) << serviceBookings[i] << endl;
+                }
+                cout << "\033[1;36m" << string(50, '-') << "\033[0m" << endl;
+                cout << left << setw(20) << "Total Monthly Sales"
+                    << setw(15) << fixed << setprecision(2) << totalMonthlySales << endl;
+                cout << "\033[1;36m" << string(50, '=') << "\033[0m" << endl;
+            }
+
+            delete[] monthlySales;
+            delete[] serviceBookings;
+            cout << endl;
+            break;
+        }
+        case 2: {
+            cout << "\033[1;36m" << string(50, '=') << "\033[0m" << endl;
+            cout << "\033[1;33m|         Overall Sales Report               |\033[0m" << endl;
+            cout << "\033[1;36m" << string(50, '=') << "\033[0m" << endl;
+
+            cout << left << setw(20) << "Service Name" << setw(15) << "Total Sales" << setw(15) << "Bookings" << endl;
+            cout << "\033[1;36m" << string(50, '-') << "\033[0m" << endl;
+
+            double* overallSales = new double[serviceCount] { 0 };
+            int* serviceBookings = new int[serviceCount] { 0 };
+            double totalOverallSales = 0.0;
+
+            ifstream bookingFile("bookings.txt");
+            if (bookingFile.is_open()) {
+                string line;
+                while (getline(bookingFile, line)) {
+                    stringstream ss(line);
+                    string customerName, serviceName, expertName;
+                    int bookingMonth, bookingDay, startHour;
+
+                    getline(ss, customerName, ',');
+                    getline(ss, serviceName, ',');
+                    getline(ss, expertName, ',');
+                    ss >> bookingMonth;
+                    ss.ignore();
+
+                    for (int i = 0; i < serviceCount; ++i) {
+                        if (caseInsensitiveEqual(services[i].name, serviceName)) {
+                            overallSales[i] += services[i].price;
+                            serviceBookings[i]++;
+                            totalOverallSales += services[i].price;
+                            break;
+                        }
+                    }
+                }
+                bookingFile.close();
+
+                for (int i = 0; i < serviceCount; ++i) {
+                    cout << left << setw(20) << services[i].name
+                        << setw(15) << fixed << setprecision(2) << overallSales[i]
+                        << setw(15) << serviceBookings[i] << endl;
+                }
+                cout << "\033[1;36m" << string(50, '-') << "\033[0m" << endl;
+                cout << left << setw(20) << "Total Overall Sales"
+                    << setw(15) << fixed << setprecision(2) << totalOverallSales << endl;
+                cout << "\033[1;36m" << string(50, '=') << "\033[0m" << endl;
+            }
+            else {
+                cout << "\033[1;31mError opening bookings file.\033[0m" << endl;
+            }
+
+            delete[] overallSales;
+            delete[] serviceBookings;
+            cout << endl;
+            break;
+        }
+        default:
+            cout << "\033[1;31mInvalid choice.\033[0m" << endl;
+            break;
+        }
     }
 };
 
 int main() {
     BeautyServiceApp app;
-    app.showLogo();
     app.showMainMenu();
     return 0;
 }
